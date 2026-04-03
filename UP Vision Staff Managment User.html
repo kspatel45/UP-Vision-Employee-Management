@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UP Vision Staff Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://esm.sh/react@18.2.0",
+          "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+          "lucide-react": "https://esm.sh/lucide-react@0.294.0",
+          "firebase/app": "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"
+        }
+      }
+    </script>
+</head>
+<body class="bg-slate-50 font-sans">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useMemo } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { 
+          Clock as ClockIcon, Calendar, DollarSign, Users, MapPin, 
+          LogOut, AlertTriangle, FileText, Plus, Trash2, 
+          X, Edit2, CalendarDays, ChevronLeft, ChevronRight, Download, TrendingUp, Layers, CreditCard, CheckCircle, FileSpreadsheet
+        } from 'lucide-react';
+        import { initializeApp } from 'firebase/app';
+        import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+        import { getFirestore, collection, onSnapshot, doc, setDoc, addDoc, updateDoc, deleteDoc, query, where, writeBatch, orderBy, limit } from 'firebase/firestore';
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyBKEsUgw9AJPYgD64D1XDkI4NHAD-5J8AQ",
+          authDomain: "up-vision-staff-management.firebaseapp.com",
+          projectId: "up-vision-staff-management",
+          storageBucket: "up-vision-staff-management.firebasestorage.app",
+          messagingSenderId: "961577049763",
+          appId: "1:961577049763:web:21ab84b2f31e699c54a916"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const getCol = (name) => collection(db, 'artifacts', 'up-vision-staff-management', 'public', 'data', name);
+
+        const getUserColor = (name) => {
+            const colors = [
+                { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
+                { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200' },
+                { bg: 'bg-violet-100', text: 'text-violet-700', border: 'border-violet-200' },
+                { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200' },
+                { bg: 'bg-rose-100', text: 'text-rose-700', border: 'border-rose-200' },
+                { bg: 'bg-cyan-100', text: 'text-cyan-700', border: 'border-cyan-200' },
+                { bg: 'bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-200' },
+                { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' }
+            ];
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            return colors[Math.abs(hash) % colors.length];
+        };
+
+        const calculateNet = (gross) => {
+            const fedTax = gross * 0.15;
+            const provTax = gross * 0.05;
+            const cpp = gross * 0.0595;
+            const ei = gross * 0.0166;
+            const totalDeductions = fedTax + provTax + cpp + ei;
+            return {
+                gross,
+                fedTax,
+                provTax,
+                cpp,
+                ei,
+                totalDeductions,
+                net: gross - totalDeductions
+            };
+        };
+
+        function App() {
+          const [user, setUser] = useState(null);
+          const [loggedInProfile, setLoggedInProfile] = useState(null);
+          const [activeTab, setActiveTab] = useState(''); 
+          const [locations, setLocations] = useState([]);
+          const [staff, setStaff] = useState([]);
+          const [punches, setPunches] = useState([]);
+          const [shifts, setShifts] = useState([]);
+          const [payments, setPayments] = useState([]);
+
+          useEffect(() => {
+            signInAnonymously(auth);
+            onAuthStateChanged(auth, (u) => setUser(u));
+          }, []);
+
+          useEffect(() => {
+            if (!user) return;
+            onSnapshot(getCol('locations'), (s) => setLocations(s.docs.map(d => ({id: d.id, ...d.data()}))));
+            onSnapshot(getCol('staff'), (s) => setStaff(s.docs.map(d => ({id: d.id, ...d.data()}))));
+            onSnapshot(getCol('punches'), (s) => setPunches(s.docs.map(d => ({id: d.id, ...d.data()}))));
+            onSnapshot(getCol('shifts'), (s) => setShifts(s.docs.map(d => ({id: d.id, ...d.data()}))));
+            onSnapshot(getCol('payments'), (s) => setPayments(s.docs.map(d => ({id: d.id, ...d.data()}))));
+          }, [user]);
+
+          useEffect(() => {
+            if (loggedInProfile) {
+              const isAdmin = loggedInProfile.role?.includes('admin');
+              setActiveTab(isAdmin ? 'dashboard' : 'schedule');
+            }
+          }, [loggedInProfile]);
+
+          if (!loggedInProfile) return <LoginScreen locations={locations} staff={staff} onLogin={setLoggedInProfile} />;
+
+          return (
+            <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
+              <Sidebar user={loggedInProfile} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => setLoggedInProfile(null)} />
+              <main className="flex-1 p-4 md:p-10 overflow-y-auto">
+                <div className="max-w-full mx-auto">
+                  {activeTab === 'dashboard' && <Dashboard user={loggedInProfile} punches={punches} />}
+                  {activeTab === 'schedule' && <TimeGridSchedule user={loggedInProfile} shifts={shifts} staff={staff} />}
+                  {activeTab === 'pay' && <EarningsTab user={loggedInProfile} punches={punches} staff={staff} locations={locations} payments={payments} />}
+                  {activeTab === 'payments_admin' && <PaymentsAdmin user={loggedInProfile} punches={punches} staff={staff} payments={payments} />}
+                  {activeTab === 'staff' && <StaffManager user={loggedInProfile} staff={staff} locations={locations} />}
+                  {activeTab === 'settings' && <LocationsManager user={loggedInProfile} locations={locations} />}
+                </div>
+              </main>
+            </div>
+          );
+        }
+
+        const LoginScreen = ({ locations, staff, onLogin }) => {
+          const [time, setTime] = useState(new Date());
+          const [locId, setLocId] = useState('');
+          const [uid, setUid] = useState('');
+          const [pw, setPw] = useState('');
+          const [err, setErr] = useState('');
+
+          useEffect(() => {
+            const timer = setInterval(() => setTime(new Date()), 1000);
+            return () => clearInterval(timer);
+          }, []);
+
+          const handleLogin = (e) => {
+            e.preventDefault();
+            const found = staff.find(s => s.username?.toLowerCase() === uid.toLowerCase() && s.password === pw);
+            if (found) {
+               if (found.role?.includes('admin') || found.locationId === locId) onLogin(found);
+               else setErr('Access Denied: Not assigned to this location.');
+            } else setErr('Invalid Credentials.');
+          };
+
+          return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-900 p-6">
+              <div className="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-md text-center border-t-8 border-blue-600">
+                <div className="mb-8">
+                  <div className="text-6xl font-black text-slate-900 tracking-tighter">
+                    {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </div>
+                  <div className="text-xs font-bold text-slate-400 uppercase mt-2 tracking-[0.2em]">{time.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</div>
+                </div>
+                <h1 className="text-2xl font-black text-slate-900 mb-8 uppercase tracking-widest">UP VISION</h1>
+                {err && <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-xl text-sm font-bold flex items-center justify-center"><AlertTriangle className="w-4 h-4 mr-2"/> {err}</div>}
+                <form onSubmit={handleLogin} className="space-y-4 text-left">
+                  <select required className="w-full bg-slate-50 border p-4 rounded-xl font-bold focus:ring-2 ring-blue-500 outline-none" value={locId} onChange={e=>setLocId(e.target.value)}>
+                    <option value="">Choose Workplace</option>
+                    {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
+                  <input required className="w-full bg-slate-50 border p-4 rounded-xl font-bold" placeholder="Username" value={uid} onChange={e=>setUid(e.target.value)} />
+                  <input required type="password" className="w-full bg-slate-50 border p-4 rounded-xl font-bold" placeholder="Password" value={pw} onChange={e=>setPw(e.target.value)} />
+                  <button type="submit" className="w-full bg-blue-600 text-white font-black py-5 rounded-xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 active:scale-[0.98]">Enter Portal</button>
+                </form>
+              </div>
+            </div>
+          );
+        };
+
+        const Sidebar = ({ user, activeTab, setActiveTab, onLogout }) => {
+          const menu = [
+            { id: 'dashboard', label: 'Punch Clock', icon: ClockIcon, roles: ['admin_manager', 'admin_viewer'] },
+            { id: 'schedule', label: 'Schedule', icon: CalendarDays, roles: ['employee', 'supervisor', 'admin_manager', 'admin_viewer'] },
+            { id: 'pay', label: 'My Earnings', icon: DollarSign, roles: ['employee', 'supervisor', 'admin_manager', 'admin_viewer'] },
+            { id: 'payments_admin', label: 'Process Payments', icon: CreditCard, roles: ['admin_manager'] },
+            { id: 'staff', label: 'Staffing', icon: Users, roles: ['admin_manager', 'admin_viewer'] },
+            { id: 'settings', label: 'Workplaces', icon: MapPin, roles: ['admin_manager'] },
+          ];
+          const filteredMenu = menu.filter(m => m.roles.includes(user.role));
+          return (
+            <aside className="w-full md:w-72 bg-slate-900 text-slate-300 flex flex-col shrink-0">
+              <div className="p-8 border-b border-slate-800/50">
+                <h2 className="text-xl font-black text-white uppercase tracking-tight">UP VISION</h2>
+                <p className="text-[10px] font-black uppercase text-blue-500 tracking-widest">{(user.role || "").replace('_', ' ')}</p>
+              </div>
+              <nav className="flex-1 p-6 space-y-2">
+                {filteredMenu.map(item => (
+                  <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center px-5 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 scale-[1.02]' : 'hover:bg-slate-800 hover:text-white'}`}>
+                    <item.icon className="w-5 h-5 mr-3" /> {item.label}
+                  </button>
+                ))}
+              </nav>
+              <button onClick={onLogout} className="p-8 text-left text-sm font-bold text-slate-500 hover:text-red-400 flex items-center group transition-colors">
+                <LogOut className="w-5 h-5 mr-3 group-hover:-translate-x-1 transition-transform" /> Sign Out
+              </button>
+            </aside>
+          );
+        };
+
+        const Dashboard = ({ user, punches }) => {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const myPunches = punches.filter(p => p.userId === user.id && p.date === todayStr).sort((a,b) => b.timestamp - a.timestamp);
+          const isPunchedIn = myPunches.length > 0 && myPunches[0].type === 'in';
+          return (
+            <div className="space-y-10">
+              <h1 className="text-4xl font-black text-slate-900 tracking-tight">Punch Clock</h1>
+              <div className="bg-white rounded-[3rem] p-16 shadow-2xl border border-slate-100 text-center relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
+                <div className="text-7xl font-black mb-10 text-slate-900 tracking-tighter">
+                   {new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                </div>
+                <button onClick={async()=>await addDoc(getCol('punches'), { userId: user.id, userName: user.name, type: isPunchedIn ? 'out' : 'in', timestamp: Date.now(), date: todayStr })} className={`w-full max-w-md py-10 rounded-[2.5rem] text-3xl font-black text-white shadow-2xl transition-all active:scale-95 ${isPunchedIn ? 'bg-red-500 shadow-red-500/30' : 'bg-emerald-500 shadow-emerald-500/30'}`}>
+                  {isPunchedIn ? 'Punch Out' : 'Punch In Now'}
+                </button>
+              </div>
+            </div>
+          );
+        };
+
+        const TimeGridSchedule = ({ user, shifts, staff }) => {
+          const [baseDate, setBaseDate] = useState(new Date());
+          const [showAdd, setShowAdd] = useState(false);
+          const [isBulk, setIsBulk] = useState(false);
+          const [newShift, setNewShift] = useState({ userId: '', startTime: '08:00', endTime: '16:00', date: '', selectedUsers: [], selectedDays: [] });
+          const isManager = user.role === 'admin_manager' || user.role === 'supervisor';
+
+          const timeIntervals = useMemo(() => {
+            const slots = [];
+            for (let t = 480; t < 1560; t += 30) {
+              const h = Math.floor(t / 60) % 24;
+              const m = t % 60;
+              const timeStr = `${h === 0 ? 12 : h > 12 ? h - 12 : h}:${m === 0 ? '00' : '30'} ${h >= 12 ? 'PM' : 'AM'}`;
+              slots.push({ label: timeStr, value: t, raw: `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}` });
+            }
+            return slots;
+          }, []);
+
+          const weekDates = useMemo(() => {
+            const start = new Date(baseDate);
+            start.setDate(start.getDate() - start.getDay());
+            return Array.from({length: 7}, (_, i) => {
+              const d = new Date(start); d.setDate(d.getDate() + i);
+              return d.toISOString().split('T')[0];
+            });
+          }, [baseDate]);
+
+          const getEmployeeForSlot = (date, slotMinutes) => {
+            return shifts.filter(s => {
+              if (s.date !== date) return false;
+              const [sH, sM] = s.startTime.split(':').map(Number);
+              const [eH, eM] = s.endTime.split(':').map(Number);
+              const startTotal = sH * 60 + sM;
+              let endTotal = eH * 60 + eM;
+              if (endTotal <= startTotal) endTotal += 1440; 
+              return slotMinutes >= startTotal && slotMinutes < endTotal;
+            }).map(s => {
+                const member = staff.find(st => st.id === s.userId);
+                return member ? { name: member.name, color: getUserColor(member.name) } : null;
+            }).filter(Boolean);
+          };
+
+          const handleSave = async () => {
+            if (isBulk) {
+                const batch = writeBatch(db);
+                newShift.selectedUsers.forEach(uid => {
+                    newShift.selectedDays.forEach(day => {
+                        const ref = doc(getCol('shifts'));
+                        batch.set(ref, { userId: uid, date: day, startTime: newShift.startTime, endTime: newShift.endTime });
+                    });
+                });
+                await batch.commit();
+            } else {
+                await addDoc(getCol('shifts'), { userId: newShift.userId, date: newShift.date, startTime: newShift.startTime, endTime: newShift.endTime });
+            }
+            setShowAdd(false);
+            setNewShift({ userId: '', startTime: '08:00', endTime: '16:00', date: '', selectedUsers: [], selectedDays: [] });
+          };
+
+          return (
+            <div className="space-y-6">
+              <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <h1 className="text-4xl font-black text-slate-900 tracking-tight">Schedule</h1>
+                <div className="flex items-center gap-3 bg-white p-2 rounded-2xl shadow-sm border">
+                   <button onClick={()=>setBaseDate(new Date(baseDate.setDate(baseDate.getDate()-7)))} className="p-3 hover:bg-slate-50 rounded-xl transition-colors"><ChevronLeft/></button>
+                   <span className="font-bold text-slate-900 px-4 min-w-[180px] text-center">Week of {weekDates[0]}</span>
+                   <button onClick={()=>setBaseDate(new Date(baseDate.setDate(baseDate.getDate()+7)))} className="p-3 hover:bg-slate-50 rounded-xl transition-colors"><ChevronRight/></button>
+                   {isManager && (
+                     <div className="flex gap-2 ml-4">
+                        <button onClick={()=>{setIsBulk(true); setShowAdd(true);}} className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-black shadow-lg flex items-center gap-2"><Layers className="w-4 h-4"/> Bulk</button>
+                        <button onClick={()=>{setIsBulk(false); setShowAdd(true);}} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20"><Plus className="w-5 h-5"/></button>
+                     </div>
+                   )}
+                </div>
+              </header>
+
+              <div className="overflow-auto max-h-[75vh] rounded-[2.5rem] border border-slate-200 shadow-2xl bg-white">
+                <table className="w-full border-collapse table-fixed min-w-[1000px]">
+                  <thead className="sticky top-0 z-10 bg-slate-900 text-white">
+                    <tr>
+                      <th className="w-32 p-6 text-[10px] font-black uppercase text-slate-500 tracking-widest">Time</th>
+                      {weekDates.map(d => (
+                        <th key={d} className="p-4 border-l border-slate-800">
+                          <div className="text-[10px] opacity-40 uppercase font-black">{new Date(d+"T00:00:00").toLocaleDateString('en-US', {weekday:'short'})}</div>
+                          <div className="font-black text-xl">{new Date(d+"T00:00:00").getDate()}</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {timeIntervals.map(slot => (
+                      <tr key={slot.value} className="group">
+                        <td className="p-3 text-center text-[10px] font-black text-slate-400 bg-slate-50/50 sticky left-0 z-10 border-r">{slot.label}</td>
+                        {weekDates.map(d => {
+                          const emps = getEmployeeForSlot(d, slot.value);
+                          return (
+                            <td 
+                              key={d} 
+                              onClick={() => { if(isManager && emps.length === 0) { setIsBulk(false); setNewShift({...newShift, date: d, startTime: slot.raw}); setShowAdd(true); } }}
+                              className={`p-1 border-l border-slate-50 min-h-[48px] text-center transition-colors group-hover:bg-slate-50/30 cursor-pointer relative`}
+                            >
+                               {emps.length === 0 && isManager && (
+                                 <div className="absolute inset-0 opacity-0 hover:opacity-100 flex items-center justify-center bg-blue-50/50">
+                                   <Plus className="w-4 h-4 text-blue-400" />
+                                 </div>
+                               )}
+                               {emps.map((emp, i) => (
+                                 <div key={i} className={`text-[10px] font-black ${emp.color.bg} ${emp.color.text} ${emp.color.border} border rounded-xl py-2 shadow-sm px-2 truncate mb-1 animate-in fade-in zoom-in duration-300`}>
+                                   {emp.name}
+                                 </div>
+                               ))}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              {showAdd && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-6">
+                  <div className="bg-white p-10 rounded-[3rem] w-full max-w-2xl shadow-2xl border-t-8 border-blue-600">
+                    <h2 className="text-3xl font-black mb-8 text-slate-900 flex items-center gap-3">
+                        {isBulk ? <Layers className="text-blue-600"/> : <Plus className="text-blue-600"/>} 
+                        {isBulk ? 'Bulk Shift Creator' : 'Create Shift'}
+                    </h2>
+                    <div className="space-y-6">
+                       {isBulk ? (
+                         <div className="grid grid-cols-2 gap-8">
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase ml-2 mb-2 block">1. Select Staff Members</label>
+                                <div className="space-y-2 max-h-48 overflow-y-auto p-4 bg-slate-50 rounded-2xl border-2 border-slate-100">
+                                    {staff.map(s => (
+                                        <label key={s.id} className="flex items-center gap-3 p-2 hover:bg-white rounded-xl cursor-pointer font-bold text-sm">
+                                            <input type="checkbox" className="w-4 h-4 rounded border-slate-300" checked={newShift.selectedUsers.includes(s.id)} onChange={e => {
+                                                const users = e.target.checked ? [...newShift.selectedUsers, s.id] : newShift.selectedUsers.filter(u => u !== s.id);
+                                                setNewShift({...newShift, selectedUsers: users});
+                                            }} />
+                                            {s.name}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase ml-2 mb-2 block">2. Select Active Days</label>
+                                <div className="space-y-2 p-4 bg-slate-50 rounded-2xl border-2 border-slate-100">
+                                    {weekDates.map(d => (
+                                        <label key={d} className="flex items-center gap-3 p-2 hover:bg-white rounded-xl cursor-pointer font-bold text-sm">
+                                            <input type="checkbox" className="w-4 h-4 rounded border-slate-300" checked={newShift.selectedDays.includes(d)} onChange={e => {
+                                                const days = e.target.checked ? [...newShift.selectedDays, d] : newShift.selectedDays.filter(day => day !== d);
+                                                setNewShift({...newShift, selectedDays: days});
+                                            }} />
+                                            {new Date(d+"T00:00:00").toLocaleDateString('en-US', {weekday:'long', day:'numeric'})}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                         </div>
+                       ) : (
+                         <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Staff Member</label>
+                                <select className="w-full border-2 border-slate-100 p-5 rounded-2xl font-bold bg-slate-50" value={newShift.userId} onChange={e=>setNewShift({...newShift, userId:e.target.value})}>
+                                    <option value="">Choose...</option>{staff.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Date</label>
+                                <input type="date" className="w-full border-2 border-slate-100 p-5 rounded-2xl font-bold bg-slate-50" value={newShift.date} onChange={e=>setNewShift({...newShift, date:e.target.value})} />
+                            </div>
+                         </div>
+                       )}
+
+                       <div className="grid grid-cols-2 gap-4">
+                         <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Shift Start</label>
+                            <input type="time" className="w-full border-2 border-slate-100 p-5 rounded-2xl font-bold bg-slate-50" value={newShift.startTime} onChange={e=>setNewShift({...newShift, startTime:e.target.value})} />
+                         </div>
+                         <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Shift End</label>
+                            <input type="time" className="w-full border-2 border-slate-100 p-5 rounded-2xl font-bold bg-slate-50" value={newShift.endTime} onChange={e=>setNewShift({...newShift, endTime:e.target.value})} />
+                         </div>
+                       </div>
+
+                       <div className="flex gap-4 pt-10">
+                         <button onClick={()=>setShowAdd(false)} className="flex-1 py-5 font-black text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-widest text-sm">Cancel</button>
+                         <button onClick={handleSave} className="flex-1 bg-blue-600 text-white py-5 rounded-2xl font-black shadow-xl shadow-blue-600/20 uppercase tracking-widest text-sm active:scale-95 transition-all">
+                             {isBulk ? 'Bulk Create Shifts' : 'Confirm Shift'}
+                         </button>
+                       </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        };
+
+        const EarningsTab = ({ user, punches, staff, locations, payments }) => {
+          const [period, setPeriod] = useState('');
+          const [exportRange, setExportRange] = useState({ start: '', end: '' });
+          const isAdmin = user.role.includes('admin');
+
+          const calcRange = (uid, start, end) => {
+            const filtered = punches.filter(p => { 
+                const d = new Date(p.timestamp); 
+                return p.userId === uid && d >= start && d <= end; 
+            });
+            let ms = 0, st = null;
+            filtered.sort((a,b)=>a.timestamp - b.timestamp).forEach(p => { 
+                if(p.type === 'in') st = p.timestamp; 
+                else if(p.type === 'out' && st) { ms += (p.timestamp - st); st = null; }
+            });
+            const hrs = ms / 36e5;
+            const rate = staff.find(s => s.id === uid)?.hourlyRate || 16.55;
+            return { hours: hrs, total: hrs * rate };
+          };
+
+          const stats = useMemo(() => {
+            const now = new Date();
+            const startYear = new Date(now.getFullYear(), 0, 1);
+            
+            // Correction: Last Month range
+           const startLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0);
+           const endLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+            
+            // Correction: Last Week range (Sun-Sat or mon-sun depending on logic, here we use last 7 full days)
+            const endLastWeek = new Date(now);
+           endLastWeek.setDate(now.getDate() - now.getDay() - 1); // Last Saturday
+           endLastWeek.setHours(23, 59, 59);
+           const startLastWeek = new Date(endLastWeek);
+           startLastWeek.setDate(endLastWeek.getDate() - 6); // Previous Sunday
+           startLastWeek.setHours(0, 0, 0);
+            
+            const earnedInfo = calcRange(user.id, new Date(now.getFullYear(), now.getMonth(), 1), now);
+            const totalEarnedCurrentMonth = earnedInfo.total;
+            const totalPaidCurrentMonth = payments
+                .filter(p => p.userId === user.id && new Date(p.timestamp).getMonth() === now.getMonth())
+                .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
+            return {
+              ytd: calcRange(user.id, startYear, now).total,
+              lastMonth: calcRange(user.id, startLastMonth, endLastMonth).total,
+              lastWeek: calcRange(user.id, startLastWeek, endLastWeek).total,
+              grossEarnedCurrent: totalEarnedCurrentMonth,
+              due: Math.max(0, calculateNet(totalEarnedCurrentMonth).net - totalPaidCurrentMonth),
+              dueHours: earnedInfo.hours
+            };
+          }, [user.id, punches, staff, payments]);
+
+          const periods = useMemo(() => {
+            const list = []; 
+            let d = new Date();
+            for(let i=0; i<24; i++){
+              const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
+              const m = monthStart.toLocaleString('default', { month: 'long' });
+              const year = monthStart.getFullYear();
+              
+              list.push({ 
+                id: `${year}-${monthStart.getMonth()}-31`, 
+                label: `${m} 15th - End, ${year}`, 
+                startDay: 15, 
+                endDay: 31,
+                month: monthStart.getMonth(),
+                year: year
+              });
+              
+              list.push({ 
+                id: `${year}-${monthStart.getMonth()}-14`, 
+                label: `${m} 1st - 14th, ${year}`, 
+                startDay: 1, 
+                endDay: 14,
+                month: monthStart.getMonth(),
+                year: year
+              });
+              
+              d.setMonth(d.getMonth() - 1);
+            }
+            return list;
+          }, []);
+
+          const handleExcelExport = () => {
+              if (!exportRange.start || !exportRange.end) return alert('Select range');
+              const start = new Date(exportRange.start);
+              const end = new Date(exportRange.end);
+              end.setHours(23,59,59);
+
+              const reportData = staff.map(s => {
+                  const rangeStats = calcRange(s.id, start, end);
+                  const deductions = calculateNet(rangeStats.total);
+                  const sPayments = payments.filter(p => p.userId === s.id && p.timestamp >= start.getTime() && p.timestamp <= end.getTime());
+                  const totalActuallyPaid = sPayments.reduce((acc, curr) => acc + curr.amount, 0);
+
+                  return {
+                      'Employee Name': s.name,
+                      'Hours Worked': rangeStats.hours.toFixed(2),
+                      'Gross Earnings': rangeStats.total.toFixed(2),
+                      'Federal Tax': deductions.fedTax.toFixed(2),
+                      'Provincial Tax': deductions.provTax.toFixed(2),
+                      'CPP': deductions.cpp.toFixed(2),
+                      'EI': deductions.ei.toFixed(2),
+                      'Total Deductions': deductions.totalDeductions.toFixed(2),
+                      'Calculated Net': deductions.net.toFixed(2),
+                      'Amount Paid to Date': totalActuallyPaid.toFixed(2),
+                      'Latest Pay Method': sPayments.length ? sPayments[sPayments.length-1].method : 'N/A',
+                      'Latest Pay Date': sPayments.length ? new Date(sPayments[sPayments.length-1].timestamp).toLocaleDateString() : 'N/A'
+                  };
+              });
+
+              const ws = XLSX.utils.json_to_sheet(reportData);
+              const wb = XLSX.utils.book_new();
+              XLSX.utils.book_append_sheet(wb, ws, "Financial Report");
+              XLSX.writeFile(wb, `UP_Vision_Financial_Report_${exportRange.start}_to_${exportRange.end}.xlsx`);
+          };
+
+          const handleDownloadPayStub = () => {
+              const selectedPeriod = periods.find(p => p.id === period);
+              if (!selectedPeriod) return;
+
+              const {jsPDF} = window.jspdf; 
+              const doc = new jsPDF();
+              
+              const start = new Date(selectedPeriod.year, selectedPeriod.month, selectedPeriod.startDay);
+              const end = new Date(selectedPeriod.year, selectedPeriod.month, selectedPeriod.endDay, 23, 59, 59);
+              
+              const rangeData = calcRange(user.id, start, end);
+              const deductions = calculateNet(rangeData.total);
+              const locName = locations.find(l => l.id === user.locationId)?.name || "Main Office";
+              
+              const lastPayment = payments
+                .filter(p => p.userId === user.id && p.timestamp >= start.getTime() && p.timestamp <= end.getTime())
+                .sort((a,b) => b.timestamp - a.timestamp)[0];
+
+              doc.setFontSize(22); doc.text("UP VISION", 105, 25, {align:'center'});
+              doc.setFontSize(14); doc.text("EARNING STATEMENT", 105, 33, {align:'center'});
+              doc.setFontSize(10);
+              doc.text(`Employee: ${user.name}`, 14, 45);
+              doc.text(`Location: ${locName}`, 14, 50);
+              doc.text(`Pay Period: ${selectedPeriod.label}`, 14, 55);
+              doc.text(`Total Hours: ${rangeData.hours.toFixed(2)} hrs`, 14, 60);
+              
+              if(lastPayment) {
+                  doc.text(`Payment Date: ${new Date(lastPayment.timestamp).toLocaleDateString()}`, 130, 45);
+                  doc.text(`Pay Method: ${lastPayment.method || 'N/A'}`, 130, 50);
+                  doc.text(`Amount Paid: $${parseFloat(lastPayment.amount).toFixed(2)}`, 130, 55);
+              }
+
+              doc.autoTable({ 
+                  startY: 70, 
+                  headStyles: {fillColor: [15, 23, 42]}, 
+                  head:[['Earning Description','Amount (CAD)']], 
+                  body:[
+                      ['Gross Earnings', `$${deductions.gross.toFixed(2)}`],
+                      ['Federal Income Tax', `-$${deductions.fedTax.toFixed(2)}`],
+                      ['Provincial Income Tax', `-$${deductions.provTax.toFixed(2)}`],
+                      ['CPP (Canada Pension Plan)', `-$${deductions.cpp.toFixed(2)}`],
+                      ['EI (Employment Insurance)', `-$${deductions.ei.toFixed(2)}`],
+                      ['TOTAL DEDUCTIONS', `-$${deductions.totalDeductions.toFixed(2)}`],
+                      ['TOTAL NET CALCULATED', `$${deductions.net.toFixed(2)}`]
+                  ],
+                  foot:[['Calculated Net Pay', `$${deductions.net.toFixed(2)}`]],
+                  footStyles: {fillColor: [37, 99, 235], textColor: [255, 255, 255]}
+              });
+              doc.save(`UP_Vision_PayStub_${user.name}_${selectedPeriod.id}.pdf`);
+          };
+
+          return (
+            <div className="space-y-10">
+              <h1 className="text-4xl font-black text-slate-900 tracking-tight">Earnings</h1>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="bg-white p-8 rounded-[2.5rem] border-2 border-slate-50 shadow-sm"><div className="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Year to Date</div><div className="text-3xl font-black text-slate-900">${stats.ytd.toLocaleString(undefined, {minimumFractionDigits: 2})}</div></div>
+                <div className="bg-white p-8 rounded-[2.5rem] border-2 border-slate-50 shadow-sm"><div className="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Last Month</div><div className="text-3xl font-black text-slate-900">${stats.lastMonth.toLocaleString(undefined, {minimumFractionDigits: 2})}</div></div>
+                <div className="bg-blue-600 p-8 rounded-[2.5rem] shadow-xl shadow-blue-600/20"><div className="text-[10px] font-black uppercase text-blue-200 mb-2 tracking-widest">Last Week</div><div className="text-3xl font-black text-white">${stats.lastWeek.toLocaleString(undefined, {minimumFractionDigits: 2})}</div></div>
+                <div className="bg-slate-900 p-8 rounded-[2.5rem] shadow-2xl"><div className="text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest">Balance Due</div><div className="text-3xl font-black text-emerald-400">${stats.due.toLocaleString(undefined, {minimumFractionDigits: 2})}</div></div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div className="bg-white p-12 rounded-[3rem] border shadow-sm">
+                    <h2 className="text-2xl font-black mb-8 text-slate-900 uppercase tracking-tight">Download Official Pay Stub</h2>
+                    <div className="space-y-6">
+                        <select className="w-full border-2 border-slate-50 p-6 rounded-[1.5rem] font-bold bg-slate-50 outline-none max-h-60" value={period} onChange={e=>setPeriod(e.target.value)}>
+                        <option value="">Select Target Pay Period (Last 24 Mo)...</option>{periods.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                        </select>
+                        <button disabled={!period} onClick={handleDownloadPayStub} className="w-full bg-blue-600 text-white py-6 rounded-[1.5rem] font-black disabled:opacity-30 flex items-center justify-center gap-3 hover:bg-blue-700 shadow-xl shadow-blue-600/20 uppercase tracking-widest active:scale-95"><Download className="w-6 h-6"/> Generate Secure PDF</button>
+                    </div>
+                </div>
+
+                {isAdmin && (
+                    <div className="bg-slate-900 p-12 rounded-[3rem] shadow-2xl border border-slate-800">
+                        <h2 className="text-2xl font-black mb-8 text-white uppercase tracking-tight flex items-center gap-3">
+                            <FileSpreadsheet className="text-emerald-400"/> Admin Financial Export
+                        </h2>
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block">Start Date</label>
+                                    <input type="date" className="w-full bg-slate-800 border-0 p-4 rounded-2xl text-white font-bold" value={exportRange.start} onChange={e=>setExportRange({...exportRange, start:e.target.value})} />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block">End Date</label>
+                                    <input type="date" className="w-full bg-slate-800 border-0 p-4 rounded-2xl text-white font-bold" value={exportRange.end} onChange={e=>setExportRange({...exportRange, end:e.target.value})} />
+                                </div>
+                            </div>
+                            <button onClick={handleExcelExport} className="w-full bg-emerald-500 text-white py-6 rounded-[1.5rem] font-black hover:bg-emerald-600 shadow-xl shadow-emerald-500/20 uppercase tracking-widest active:scale-95">
+                                Export Master Excel
+                            </button>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest text-center">Includes: Deductions, Gross, Net, & Payment Audit</p>
+                        </div>
+                    </div>
+                )}
+              </div>
+            </div>
+          );
+        };
+
+        const PaymentsAdmin = ({ staff, punches, payments }) => {
+            const [selectedUid, setSelectedUid] = useState('');
+            const [amount, setAmount] = useState('');
+            const [method, setMethod] = useState('');
+            const [ref, setRef] = useState('');
+
+            const netDueAmount = useMemo(() => {
+                if(!selectedUid) return 0;
+                const now = new Date();
+                const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                
+                const filtered = punches.filter(p => { 
+                    const d = new Date(p.timestamp); 
+                    return p.userId === selectedUid && d >= startMonth && d <= now; 
+                });
+                let ms = 0, st = null;
+                filtered.sort((a,b)=>a.timestamp - b.timestamp).forEach(p => { 
+                    if(p.type === 'in') st = p.timestamp; 
+                    else if(p.type === 'out' && st) { ms += (p.timestamp - st); st = null; }
+                });
+                const rate = staff.find(s => s.id === selectedUid)?.hourlyRate || 0;
+                const grossEarned = (ms / 36e5) * rate;
+                
+                const netCalculated = calculateNet(grossEarned).net;
+
+                const paid = payments
+                    .filter(p => p.userId === selectedUid && new Date(p.timestamp).getMonth() === now.getMonth())
+                    .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
+                return Math.max(0, netCalculated - paid);
+            }, [selectedUid, punches, staff, payments]);
+
+            const handlePay = async () => {
+                if(!selectedUid || !amount) return;
+                await addDoc(getCol('payments'), {
+                    userId: selectedUid,
+                    amount: parseFloat(amount),
+                    method: method,
+                    reference: ref,
+                    timestamp: Date.now(),
+                    processedBy: auth.currentUser.uid
+                });
+                setAmount(''); setMethod(''); setRef('');
+            };
+
+            return (
+                <div className="space-y-10">
+                    <h1 className="text-4xl font-black text-slate-900 tracking-tight">Process Payments</h1>
+                    <div className="bg-white p-12 rounded-[3rem] border shadow-2xl max-w-2xl">
+                        <div className="space-y-8">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Select Staff Member</label>
+                                <select className="w-full border-2 border-slate-50 p-6 rounded-2xl font-bold bg-slate-50 outline-none" value={selectedUid} onChange={e=>setSelectedUid(e.target.value)}>
+                                    <option value="">Choose Employee...</option>
+                                    {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                            </div>
+
+                            {selectedUid && (
+                                <div className="p-8 bg-emerald-50 rounded-3xl border-2 border-emerald-100 animate-in fade-in slide-in-from-top-4">
+                                    <div className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Net Balance Due (After Deductions)</div>
+                                    <div className="text-5xl font-black text-emerald-700">${netDueAmount.toLocaleString(undefined, {minimumFractionDigits:2})}</div>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Payment Amount</label>
+                                    <input type="number" step="0.01" className="w-full border-2 border-slate-50 p-6 rounded-2xl font-bold bg-slate-50" placeholder="0.00" value={amount} onChange={e=>setAmount(e.target.value)} />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Payment Method</label>
+                                    <input className="w-full border-2 border-slate-50 p-6 rounded-2xl font-bold bg-slate-50" placeholder="e.g. E-Transfer, Cash" value={method} onChange={e=>setMethod(e.target.value)} />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Reference / Note (Optional)</label>
+                                <input className="w-full border-2 border-slate-50 p-6 rounded-2xl font-bold bg-slate-50" placeholder="Reference Number" value={ref} onChange={e=>setRef(e.target.value)} />
+                            </div>
+
+                            <button onClick={handlePay} disabled={!selectedUid || !amount} className="w-full bg-slate-900 text-white py-8 rounded-[2rem] font-black text-xl shadow-2xl hover:bg-black transition-all active:scale-95 disabled:opacity-20 flex items-center justify-center gap-3">
+                                <CheckCircle className="w-6 h-6"/> Confirm Payment
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const StaffManager = ({ user, staff, locations }) => {
+          const [showAdd, setShowAdd] = useState(false);
+          const [editingId, setEditingId] = useState(null);
+          const [form, setForm] = useState({ name:'', username:'', password:'', role:'employee', hourlyRate:16.55, locationId:locations[0]?.id || '' });
+          const isFullAdmin = user.role === 'admin_manager';
+
+          const handleSave = async (e) => {
+            e.preventDefault();
+            if (editingId) await updateDoc(doc(getCol('staff'), editingId), form);
+            else await addDoc(getCol('staff'), form);
+            setShowAdd(false); setEditingId(null);
+            setForm({ name:'', username:'', password:'', role:'employee', hourlyRate:16.55, locationId:locations[0]?.id || '' });
+          };
+
+          return (
+            <div className="space-y-10">
+              <div className="flex justify-between items-center">
+                <h1 className="text-4xl font-black text-slate-900 tracking-tight">Staff Management</h1>
+                {isFullAdmin && <button onClick={()=>{setShowAdd(!showAdd); setEditingId(null);}} className="bg-blue-600 text-white px-8 py-5 rounded-2xl font-black shadow-2xl hover:bg-blue-700 flex items-center gap-2"><Plus className="w-6 h-6"/> Add New Staff</button>}
+              </div>
+              {showAdd && isFullAdmin && (
+                <form onSubmit={handleSave} className="bg-white p-12 rounded-[3rem] border-2 border-slate-50 grid grid-cols-1 md:grid-cols-3 gap-8 shadow-2xl">
+                  <input required className="w-full border-2 border-slate-50 p-5 rounded-2xl font-bold bg-slate-50" placeholder="Full Name" value={form.name} onChange={e=>setForm({...form, name:e.target.value})} />
+                  <input required className="w-full border-2 border-slate-50 p-5 rounded-2xl font-bold bg-slate-50" placeholder="Username" value={form.username} onChange={e=>setForm({...form, username:e.target.value})} />
+                  <input required type="password" className="w-full border-2 border-slate-50 p-5 rounded-2xl font-bold bg-slate-50" placeholder="Password" value={form.password} onChange={e=>setForm({...form, password:e.target.value})} />
+                  <input required type="number" step="0.01" className="w-full border-2 border-slate-50 p-5 rounded-2xl font-bold bg-slate-50" value={form.hourlyRate} onChange={e=>setForm({...form, hourlyRate:parseFloat(e.target.value)})} />
+                  <select className="w-full border-2 border-slate-50 p-5 rounded-2xl font-bold bg-slate-50" value={form.locationId} onChange={e=>setForm({...form, locationId:e.target.value})}>{locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select>
+                  <select className="w-full border-2 border-slate-50 p-5 rounded-2xl font-bold bg-slate-50" value={form.role} onChange={e=>setForm({...form, role:e.target.value})}><option value="employee">Employee</option><option value="supervisor">Supervisor</option><option value="admin_viewer">Admin Viewer</option><option value="admin_manager">Admin Manager</option></select>
+                  <button type="submit" className="md:col-span-3 bg-slate-900 text-white py-6 rounded-[1.5rem] font-black uppercase tracking-[0.2em] shadow-xl">{editingId ? 'Update Member Profile' : 'Confirm Registration'}</button>
+                </form>
+              )}
+              <div className="bg-white rounded-[3rem] border border-slate-100 overflow-hidden shadow-sm">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400">
+                    <tr><th className="px-10 py-8">Team Member</th><th className="px-10 py-8">Pay Rate</th><th className="px-10 py-8">Classification</th><th className="px-10 py-8 text-right">Settings</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {staff.map(s => (
+                      <tr key={s.id} className="hover:bg-slate-50/50">
+                        <td className="px-10 py-8"><div className="font-black text-slate-900 text-lg">{s.name}</div><div className="text-slate-400 text-xs font-bold">@{s.username}</div></td>
+                        <td className="px-10 py-8 font-black text-slate-600">${s.hourlyRate?.toFixed(2)}/hr</td>
+                        <td className="px-10 py-8"><span className="px-4 py-2 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase tracking-wider">{s.role.replace('_', ' ')}</span></td>
+                        <td className="px-10 py-8 text-right">
+                          {isFullAdmin && (
+                            <div className="flex justify-end gap-3">
+                               <button onClick={()=>{setEditingId(s.id); setForm(s); setShowAdd(true);}} className="p-4 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-2xl"><Edit2 className="w-5 h-5"/></button>
+                               <button onClick={async() => { if(confirm('Delete user profile?')) await deleteDoc(doc(getCol('staff'), s.id)) }} className="p-4 bg-slate-50 text-slate-400 hover:text-red-600 rounded-2xl"><Trash2 className="w-5 h-5"/></button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        };
+
+        const LocationsManager = ({ user, locations }) => {
+          const [newName, setNewName] = useState('');
+          return (
+            <div className="space-y-10">
+               <h1 className="text-4xl font-black text-slate-900 tracking-tight">Workplaces</h1>
+               <form onSubmit={async(e)=>{e.preventDefault(); if(newName) { await addDoc(getCol('locations'), {name:newName}); setNewName(''); }}} className="flex gap-4 max-w-lg">
+                    <input required className="flex-1 border-2 border-white p-5 rounded-[1.5rem] font-bold bg-white shadow-sm" placeholder="Workplace Name..." value={newName} onChange={e=>setNewName(e.target.value)} />
+                    <button type="submit" className="bg-blue-600 text-white px-10 rounded-[1.5rem] font-black shadow-lg shadow-blue-600/20 uppercase tracking-widest text-xs">Add</button>
+                </form>
+               <div className="bg-white rounded-[3rem] border border-slate-100 overflow-hidden max-w-lg shadow-sm">
+                 {locations.map(l => (
+                    <div key={l.id} className="p-8 border-b border-slate-50 flex justify-between items-center group font-black last:border-0 hover:bg-slate-50/50">
+                        <span className="text-slate-900">{l.name}</span>
+                        <button onClick={async()=>await deleteDoc(doc(getCol('locations'), l.id))} className="text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100"><X className="w-6 h-6"/></button>
+                    </div>
+                ))}
+               </div>
+            </div>
+          );
+        };
+
+        const root = createRoot(document.getElementById('root')); root.render(<App />);
+    </script>
+</body>
+</html>
