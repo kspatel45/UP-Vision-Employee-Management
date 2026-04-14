@@ -223,7 +223,7 @@
                 <div className="text-7xl font-black mb-10 text-slate-900 tracking-tighter">
                    {new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
                 </div>
-                <button onClick={async()=>await addDoc(getCol('punches'), { userId: user.id, userName: user.name, type: isPunchedIn ? 'out' : 'timestamp: Date.now()', date: todayStr })} className={`w-full max-w-md py-10 rounded-[2.5rem] text-3xl font-black text-white shadow-2xl transition-all active:scale-95 ${isPunchedIn ? 'bg-red-500 shadow-red-500/30' : 'bg-emerald-500 shadow-emerald-500/30'}`}>
+                <button onClick={async()=>await addDoc(getCol('punches'), { userId: user.id, userName: user.name, type: isPunchedIn ? 'out' : 'in', timestamp: Date.now(), date: todayStr })} className={`w-full max-w-md py-10 rounded-[2.5rem] text-3xl font-black text-white shadow-2xl transition-all active:scale-95 ${isPunchedIn ? 'bg-red-500 shadow-red-500/30' : 'bg-emerald-500 shadow-emerald-500/30'}`}>
                   {isPunchedIn ? 'Punch Out' : 'Punch In Now'}
                 </button>
               </div>
@@ -235,7 +235,7 @@
           const [baseDate, setBaseDate] = useState(new Date());
           const [showAdd, setShowAdd] = useState(false);
           const [isBulk, setIsBulk] = useState(false);
-          const [editingShiftId, setEditingShiftId] = useState(null); // Track edit state
+          const [editingShiftId, setEditingShiftId] = useState(null); 
           const [newShift, setNewShift] = useState({ userId: '', startTime: '08:00', endTime: '16:00', date: '', selectedUsers: [], selectedDays: [] });
           const isManager = user.role === 'admin_manager' || user.role === 'supervisor';
 
@@ -251,13 +251,19 @@
           }, []);
 
           const weekDates = useMemo(() => {
-            const start = new Date(baseDate);
-            start.setDate(start.getDate() - start.getDay());
-            return Array.from({length: 7}, (_, i) => {
-              const d = new Date(start); d.setDate(d.getDate() + i);
-              return d.toISOString().split('T')[0];
-            });
-          }, [baseDate]);
+  const start = new Date(baseDate);
+  // Get the current day (0 for Sunday, 1 for Monday, etc.)
+  const day = start.getDay();
+  // Adjust so that Monday (1) is 0, and Sunday (0) becomes 6
+  const diff = start.getDate() - day + (day === 0 ? -6 : 1);
+  
+  start.setDate(diff);
+  return Array.from({length: 7}, (_, i) => {
+    const d = new Date(start); 
+    d.setDate(start.getDate() + i);
+    return d.toISOString().split('T')[0];
+  });
+}, [baseDate]);
 
           const getEmployeeForSlot = (date, slotMinutes) => {
             return shifts.filter(s => {
@@ -270,7 +276,6 @@
               return slotMinutes >= startTotal && slotMinutes < endTotal;
             }).map(s => {
                 const member = staff.find(st => st.id === s.userId);
-                // Return comprehensive shift data to enable editing
                 return member ? { shiftId: s.id, userId: s.userId, date: s.date, startTime: s.startTime, endTime: s.endTime, name: member.name, color: getUserColor(member.name) } : null;
             }).filter(Boolean);
           };
@@ -286,7 +291,6 @@
                 });
                 await batch.commit();
             } else if (editingShiftId) {
-                // Update existing shift
                 await updateDoc(doc(getCol('shifts'), editingShiftId), { 
                   userId: newShift.userId, 
                   date: newShift.date, 
@@ -301,6 +305,51 @@
             setNewShift({ userId: '', startTime: '08:00', endTime: '16:00', date: '', selectedUsers: [], selectedDays: [] });
           };
 
+          const handleExportSchedule = () => {
+              const {jsPDF} = window.jspdf;
+              const doc = new jsPDF('landscape');
+              
+              doc.setFontSize(22); 
+              doc.text("UP VISION - WEEKLY SCHEDULE", 14, 20);
+              doc.setFontSize(12);
+              doc.text(`Week of: ${weekDates[0]} to ${weekDates[6]}`, 14, 30);
+
+              const head = [['Employee', ...weekDates.map(d => {
+                  const dateObj = new Date(d + "T00:00:00");
+                  return `${dateObj.toLocaleDateString('en-US', {weekday:'short'})} ${dateObj.getDate()}`;
+              })]];
+
+              const staffInWeek = staff.filter(emp => 
+                  shifts.some(s => s.userId === emp.id && weekDates.includes(s.date))
+              );
+              
+              const displayStaff = staffInWeek.length > 0 ? staffInWeek : staff;
+
+              const body = displayStaff.map(emp => {
+                  const row = [emp.name];
+                  weekDates.forEach(date => {
+                      const dayShifts = shifts.filter(s => s.userId === emp.id && s.date === date);
+                      if (dayShifts.length > 0) {
+                          row.push(dayShifts.map(s => `${s.startTime} to ${s.endTime}`).join('\n'));
+                      } else {
+                          row.push('-');
+                      }
+                  });
+                  return row;
+              });
+
+              doc.autoTable({
+                  startY: 40,
+                  head: head,
+                  body: body,
+                  headStyles: {fillColor: [15, 23, 42]},
+                  styles: {fontSize: 10, cellPadding: 4, valign: 'middle'},
+                  alternateRowStyles: {fillColor: [248, 250, 252]}
+              });
+
+              doc.save(`UP_Vision_Schedule_Week_Of_${weekDates[0]}.pdf`);
+          };
+
           return (
             <div className="space-y-6">
               <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -309,6 +358,12 @@
                    <button onClick={()=>setBaseDate(new Date(baseDate.setDate(baseDate.getDate()-7)))} className="p-3 hover:bg-slate-50 rounded-xl transition-colors"><ChevronLeft/></button>
                    <span className="font-bold text-slate-900 px-4 min-w-[180px] text-center">Week of {weekDates[0]}</span>
                    <button onClick={()=>setBaseDate(new Date(baseDate.setDate(baseDate.getDate()+7)))} className="p-3 hover:bg-slate-50 rounded-xl transition-colors"><ChevronRight/></button>
+                   
+                   {/* Export Schedule Button */}
+                   <button onClick={handleExportSchedule} title="Export Schedule to PDF" className="ml-2 p-3 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-xl transition-colors">
+                     <FileText className="w-5 h-5"/>
+                   </button>
+
                    {isManager && (
                      <div className="flex gap-2 ml-4">
                         <button onClick={()=>{setIsBulk(true); setEditingShiftId(null); setShowAdd(true);}} className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-black shadow-lg flex items-center gap-2"><Layers className="w-4 h-4"/> Bulk</button>
@@ -318,7 +373,7 @@
                 </div>
               </header>
 
-              <div className="overflow-auto max-h-[75vh] rounded-[2.5rem] border border-slate-200 shadow-2xl bg-white">
+              <div id="schedule-container" className="overflow-auto max-h-[75vh] rounded-[2.5rem] border border-slate-200 shadow-2xl bg-white p-2">
                 <table className="w-full border-collapse table-fixed min-w-[1000px]">
                   <thead className="sticky top-0 z-10 bg-slate-900 text-white">
                     <tr>
@@ -352,8 +407,7 @@
                                  <div 
                                    key={i} 
                                    onClick={(e) => {
-                                      e.stopPropagation(); // Prevents empty TD click
-                                      // Only Super Admin can edit shifts
+                                      e.stopPropagation(); 
                                       if (user.role === 'admin_manager') {
                                           setEditingShiftId(emp.shiftId);
                                           setNewShift({ userId: emp.userId, date: emp.date, startTime: emp.startTime, endTime: emp.endTime, selectedUsers: [], selectedDays: [] });
@@ -491,10 +545,10 @@
             const endLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
             
             const endLastWeek = new Date(now);
-            endLastWeek.setDate(now.getDate() - now.getDay() - 1); // Last Saturday
+            endLastWeek.setDate(now.getDate() - now.getDay() - 1); 
             endLastWeek.setHours(23, 59, 59);
             const startLastWeek = new Date(endLastWeek);
-            startLastWeek.setDate(endLastWeek.getDate() - 6); // Previous Sunday
+            startLastWeek.setDate(endLastWeek.getDate() - 6); 
             startLastWeek.setHours(0, 0, 0);
             
             const earnedInfo = calcRange(user.id, new Date(now.getFullYear(), now.getMonth(), 1), now);
