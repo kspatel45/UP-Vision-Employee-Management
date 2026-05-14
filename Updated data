@@ -1,0 +1,1 @@
+{ id: 'pay', label: 'My Earnings', icon: DollarSign, roles: ['employee', 'supervisor', 'admin_manager', 'admin_viewer'] },
