@@ -85,6 +85,89 @@
             };
         };
 
+        const generatePayStubPDF = (employee, hours, rate, deductions, start, end) => {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+
+  // Company Header
+  doc.setFontSize(22);
+  doc.setFont("helvetica", "bold");
+  doc.text("UP VISION", 14, 20);
+  
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text("Corporate Staff Payroll Statement", 14, 26);
+  
+  // Pay Stub Metadata Box
+  doc.setDrawColor(226, 232, 240);
+  doc.setFillColor(248, 250, 252);
+  doc.rect(14, 32, 182, 24, "FD");
+  
+  doc.setFont("helvetica", "bold");
+  doc.text("Employee Name:", 18, 40);
+  doc.text("Pay Period:", 18, 46);
+  doc.text("Payment Date:", 18, 52);
+  
+  doc.setFont("helvetica", "normal");
+  doc.text(`${employee.name}`, 50, 40);
+  doc.text(`${start} to ${end}`, 50, 46);
+  doc.text(`${new Date().toISOString().split('T')[0]}`, 50, 52);
+
+  // Table Data Structures
+  const earningsHead = [['Earnings Breakdown', 'Hours', 'Rate', 'Total Amount']];
+  const earningsBody = [
+    ['Regular Hourly Base Pay', parseFloat(hours).toFixed(2), `$${parseFloat(rate).toFixed(2)}`, `$${deductions.gross.toFixed(2)}`],
+    ['Gross Earnings Total', '', '', `$${deductions.gross.toFixed(2)}`]
+  ];
+
+  const deductionsHead = [['Statutory Deduction Details', 'Percentage / Rate', 'Amount Withheld']];
+  const deductionsBody = [
+    ['Federal Income Tax', '15.0%', `$${deductions.fedTax.toFixed(2)}`],
+    ['Provincial Income Tax', '5.0%', `$${deductions.provTax.toFixed(2)}`],
+    ['CPP (Canada Pension Plan)', '5.95%', `$${deductions.cpp.toFixed(2)}`],
+    ['EI (Employment Insurance)', '1.66%', `$${deductions.ei.toFixed(2)}`],
+    ['Total Statutory Deductions', '', `$${deductions.totalDeductions.toFixed(2)}`]
+  ];
+
+  // Render Earnings Table
+  doc.autoTable({
+    startY: 64,
+    head: earningsHead,
+    body: earningsBody,
+    headStyles: { fillColor: [15, 23, 42] },
+    styles: { fontSize: 10, cellPadding: 4 },
+    footStyles: { fontStyle: 'bold' }
+  });
+
+  // Render Deductions Table
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 10,
+    head: deductionsHead,
+    body: deductionsBody,
+    headStyles: { fillColor: [71, 85, 105] },
+    styles: { fontSize: 10, cellPadding: 4 }
+  });
+
+  // Net Pay Summary Banner Area
+  const finalY = doc.lastAutoTable.finalY + 15;
+  doc.setFillColor(239, 246, 255);
+  doc.setDrawColor(191, 219, 254);
+  doc.rect(14, finalY, 182, 20, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text("NET TAKE-HOME PAY:", 20, finalY + 13);
+  doc.text(`$${deductions.net.toFixed(2)}`, 140, finalY + 13);
+
+  // Footer note
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "italic");
+  doc.text("This is an official administrative payroll copy prepared through the UP Vision Staff Portal.", 14, finalY + 30);
+
+  // Trigger browser download action
+  doc.save(`PayStub_${employee.name.replace(/\s+/g, '_')}_${start}.pdf`);
+};
+
         function App() {
           const [user, setUser] = useState(null);
           const [loggedInProfile, setLoggedInProfile] = useState(null);
@@ -749,95 +832,151 @@
           );
         };
 
-        const PaymentsAdmin = ({ staff, punches, payments }) => {
-            const [selectedUid, setSelectedUid] = useState('');
-            const [amount, setAmount] = useState('');
-            const [method, setMethod] = useState('');
-            const [ref, setRef] = useState('');
+        const PaymentsAdmin = ({ user, punches, staff, payments }) => {
+  // State for the Manual Pay Stub Generator
+  const [selectedStaffId, setSelectedStaffId] = useState('');
+  const [manualHours, setManualHours] = useState('');
+  const [payPeriodStart, setPayPeriodStart] = useState('');
+  const [payPeriodEnd, setPayPeriodEnd] = useState('');
 
-            const netDueAmount = useMemo(() => {
-                if(!selectedUid) return 0;
-                const now = new Date();
-                const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-                
-                const filtered = punches.filter(p => { 
-                    const d = new Date(p.timestamp); 
-                    return p.userId === selectedUid && d >= startMonth && d <= now; 
-                });
-                let ms = 0, st = null;
-                filtered.sort((a,b)=>a.timestamp - b.timestamp).forEach(p => { 
-                    if(p.type === 'in') st = p.timestamp; 
-                    else if(p.type === 'out' && st) { ms += (p.timestamp - st); st = null; }
-                });
-                const rate = staff.find(s => s.id === selectedUid)?.hourlyRate || 0;
-                const grossEarned = (ms / 36e5) * rate;
-                
-                const netCalculated = calculateNet(grossEarned).net;
+  // Helper local function to generate PDF Pay Stubs cleanly
+  const handleGenerateManualStub = () => {
+    if (!selectedStaffId || !manualHours || !payPeriodStart || !payPeriodEnd) {
+      alert("Please fill out all fields to generate the pay stub.");
+      return;
+    }
 
-                const paid = payments
-                    .filter(p => p.userId === selectedUid && new Date(p.timestamp).getMonth() === now.getMonth())
-                    .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    const employee = staff.find(s => s.id === selectedStaffId);
+    if (!employee) return;
 
-                return Math.max(0, netCalculated - paid);
-            }, [selectedUid, punches, staff, payments]);
+    const hourlyRate = parseFloat(employee.hourlyRate) || 16.55; 
+    const grossPay = hourlyRate * parseFloat(manualHours);
+    
+    // Call your exact global math deduction logic
+    const deductions = calculateNet(grossPay);
 
-            const handlePay = async () => {
-                if(!selectedUid || !amount) return;
-                await addDoc(getCol('payments'), {
-                    userId: selectedUid,
-                    amount: parseFloat(amount),
-                    method: method,
-                    reference: ref,
-                    timestamp: Date.now(),
-                    processedBy: auth.currentUser.uid
-                });
-                setAmount(''); setMethod(''); setRef('');
-            };
+    // Call PDF Constructor Engine
+    generatePayStubPDF(employee, manualHours, hourlyRate, deductions, payPeriodStart, payPeriodEnd);
+  };
 
-            return (
-                <div className="space-y-10">
-                    <h1 className="text-4xl font-black text-slate-900 tracking-tight">Process Payments</h1>
-                    <div className="bg-white p-12 rounded-[3rem] border shadow-2xl max-w-2xl">
-                        <div className="space-y-8">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Select Staff Member</label>
-                                <select className="w-full border-2 border-slate-50 p-6 rounded-2xl font-bold bg-slate-50 outline-none" value={selectedUid} onChange={e=>setSelectedUid(e.target.value)}>
-                                    <option value="">Choose Employee...</option>
-                                    {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                </select>
-                            </div>
+  return (
+    <div className="space-y-10">
+      {/* 1. TOP HEADER SECTION */}
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight">Process Payments</h1>
+          <p className="text-sm font-bold text-slate-400 mt-1">Super-Admin Management Dashboard</p>
+        </div>
+      </header>
 
-                            {selectedUid && (
-                                <div className="p-8 bg-emerald-50 rounded-3xl border-2 border-emerald-100 animate-in fade-in slide-in-from-top-4">
-                                    <div className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Net Balance Due (After Deductions)</div>
-                                    <div className="text-5xl font-black text-emerald-700">${netDueAmount.toLocaleString(undefined, {minimumFractionDigits:2})}</div>
-                                </div>
-                            )}
+      {/* 2. MANUAL PAY STUB GENERATOR INTERFACE CARD */}
+      <div className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
+        <h2 className="text-xl font-black text-slate-900 mb-6 uppercase tracking-wider flex items-center gap-3">
+          <FileSpreadsheet className="text-blue-600 w-5 h-5"/> Manual Pay Stub Generator
+        </h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5 items-end">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Employee</label>
+            <select 
+              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-sm focus:ring-2 ring-blue-500 outline-none"
+              value={selectedStaffId} 
+              onChange={e => setSelectedStaffId(e.target.value)}
+            >
+              <option value="">Select Employee...</option>
+              {staff.map(s => (
+                <option key={s.id} value={s.id}>{s.name} (${s.hourlyRate || '16.55'}/hr)</option>
+              ))}
+            </select>
+          </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Payment Amount</label>
-                                    <input type="number" step="0.01" className="w-full border-2 border-slate-50 p-6 rounded-2xl font-bold bg-slate-50" placeholder="0.00" value={amount} onChange={e=>setAmount(e.target.value)} />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Payment Method</label>
-                                    <input className="w-full border-2 border-slate-50 p-6 rounded-2xl font-bold bg-slate-50" placeholder="e.g. E-Transfer, Cash" value={method} onChange={e=>setMethod(e.target.value)} />
-                                </div>
-                            </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Total Hours</label>
+            <input 
+              type="number" 
+              step="0.1"
+              placeholder="e.g. 75.5" 
+              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-sm focus:ring-2 ring-blue-500 outline-none"
+              value={manualHours}
+              onChange={e => setManualHours(e.target.value)}
+            />
+          </div>
 
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Reference / Note (Optional)</label>
-                                <input className="w-full border-2 border-slate-50 p-6 rounded-2xl font-bold bg-slate-50" placeholder="Reference Number" value={ref} onChange={e=>setRef(e.target.value)} />
-                            </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Period Start</label>
+            <input 
+              type="date" 
+              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-sm focus:ring-2 ring-blue-500 outline-none"
+              value={payPeriodStart}
+              onChange={e => setPayPeriodStart(e.target.value)}
+            />
+          </div>
 
-                            <button onClick={handlePay} disabled={!selectedUid || !amount} className="w-full bg-slate-900 text-white py-8 rounded-[2rem] font-black text-xl shadow-2xl hover:bg-black transition-all active:scale-95 disabled:opacity-20 flex items-center justify-center gap-3">
-                                <CheckCircle className="w-6 h-6"/> Confirm Payment
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Period End</label>
+            <input 
+              type="date" 
+              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-sm focus:ring-2 ring-blue-500 outline-none"
+              value={payPeriodEnd}
+              onChange={e => setPayPeriodEnd(e.target.value)}
+            />
+          </div>
+
+          <button 
+            onClick={handleGenerateManualStub}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-lg shadow-blue-600/20 uppercase tracking-wider text-xs transition-all active:scale-[0.98] h-[52px]"
+          >
+            Download Pay Stub
+          </button>
+        </div>
+      </div>
+
+      {/* 3. LIVE STAFF TRACKING RUNNING OVERVIEW SUMMARY */}
+      <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden">
+        <div className="p-8 border-b border-slate-50 bg-slate-50/50">
+          <h2 className="text-lg font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+            <Users className="text-slate-700 w-5 h-5" /> Team Earnings & Hourly Summaries
+          </h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-left min-w-[800px]">
+            <thead>
+              <tr className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest">
+                <th className="p-5">Employee</th>
+                <th className="p-5">Assigned Wage Base</th>
+                <th className="p-5">Total Historic Punches</th>
+                <th className="p-5">Processed Payroll Records</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-sm font-bold text-slate-700">
+              {staff.map(member => {
+                const staffPunches = punches.filter(p => p.userId === member.id);
+                const staffPayments = payments.filter(p => p.userId === member.id);
+                return (
+                  <tr key={member.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="p-5 font-black text-slate-900">{member.name}</td>
+                    <td className="p-5">${parseFloat(member.hourlyRate || 16.55).toFixed(2)} / hr</td>
+                    <td className="p-5">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-black bg-slate-100 text-slate-600">
+                        {staffPunches.length} records
+                      </span>
+                    </td>
+                    <td className="p-5">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-black ${staffPayments.length > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                        {staffPayments.length} Stub(s) Issued
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
 
         const StaffManager = ({ user, staff, locations }) => {
           const [showAdd, setShowAdd] = useState(false);
