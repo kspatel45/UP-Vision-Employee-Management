@@ -259,7 +259,7 @@
   
   start.setDate(diff);
   return Array.from({length: 7}, (_, i) => {
-    const d = new Date(start); 
+    const d = new Date(start)+ i - start.getDay() + 1); 
     d.setDate(start.getDate() + i);
     return d.toISOString().split('T')[0];
   });
