@@ -251,17 +251,20 @@
           }, []);
 
           const weekDates = useMemo(() => {
-  const start = new Date(baseDate);
-  // Get the current day (0 for Sunday, 1 for Monday, etc.)
-  const day = start.getDay();
-  // Adjust so that Monday (1) is 0, and Sunday (0) becomes 6
-  const diff = start.getDate() - day + (day === 0 ? -6 : 1);
+  const current = new Date(baseDate);
+  const dayOfWeek = current.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
   
-  start.setDate(diff);
-  return Array.from({length: 7}, (_, i) => {
-    const d = new Date(start)+ i - start.getDay() + 1); 
-    d.setDate(start.getDate() + i);
-    return d.toISOString().split('T')[0];
+  // Hardcode the distance to Monday: If Sunday (0), go back 6 days. Otherwise, subtract (dayOfWeek - 1)
+  const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  
+  const monday = new Date(current);
+  monday.setDate(current.getDate() + distanceToMonday);
+  
+  // Explicitly generate the 7 days starting exactly on that Monday
+  return Array.from({ length: 7 }, (_, i) => {
+    const nextDay = new Date(monday);
+    nextDay.setDate(monday.getDate() + i);
+    return nextDay.toISOString().split('T')[0]; // Returns "YYYY-MM-DD"
   });
 }, [baseDate]);
 
@@ -315,7 +318,8 @@
               doc.text(`Week of: ${weekDates[0]} to ${weekDates[6]}`, 14, 30);
 
               const head = [['Employee', ...weekDates.map(d => {
-                  const dateObj = new Date(d.replace(/-/g, '/'));
+                  const [year, month, day] = d.split('-').map(Number);
+                const dateObj = new Date(year, month - 1, day);
                   return `${dateObj.toLocaleDateString('en-US', {weekday:'short'})} ${dateObj.getDate()}`;
               })]];
 
