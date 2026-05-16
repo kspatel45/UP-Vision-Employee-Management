@@ -315,7 +315,7 @@
               doc.text(`Week of: ${weekDates[0]} to ${weekDates[6]}`, 14, 30);
 
               const head = [['Employee', ...weekDates.map(d => {
-                  const dateObj = new Date(d + "T00:00:00");
+                  const dateObj = new Date(d.replace(/-/g, '/'));
                   return `${dateObj.toLocaleDateString('en-US', {weekday:'short'})} ${dateObj.getDate()}`;
               })]];
 
@@ -381,7 +381,7 @@
                       {weekDates.map(d => (
                         <th key={d} className="p-4 border-l border-slate-800">
                           <div className="text-[10px] opacity-40 uppercase font-black">{new Date(d+"T00:00:00").toLocaleDateString('en-US', {weekday:'short'})}</div>
-                          <div className="font-black text-xl">{new Date(d+"T00:00:00").getDate()}</div>
+                          <div className="font-black text-xl">{new Date(d.replace(/-/g, '/')).getDate()}</div>
                         </th>
                       ))}
                     </tr>
