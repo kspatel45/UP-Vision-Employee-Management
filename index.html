@@ -309,50 +309,63 @@
           };
 
           const handleExportSchedule = () => {
-              const {jsPDF} = window.jspdf;
-              const doc = new jsPDF('landscape');
-              
-              doc.setFontSize(22); 
-              doc.text("UP VISION - WEEKLY SCHEDULE", 14, 20);
-              doc.setFontSize(12);
-              doc.text(`Week of: ${weekDates[0]} to ${weekDates[6]}`, 14, 30);
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('landscape');
+    
+    doc.setFontSize(22); 
+    doc.text("UP VISION - WEEKLY SCHEDULE", 14, 20);
+    doc.setFontSize(12);
+    doc.text(`Week of: ${weekDates[0]} to ${weekDates[6]}`, 14, 30);
 
-              const head = [['Employee', ...weekDates.map(d => {
-                  const [year, month, day] = d.split('-').map(Number);
-                const dateObj = new Date(year, month - 1, day);
-                  return `${dateObj.toLocaleDateString('en-US', {weekday:'short'})} ${dateObj.getDate()}`;
-              })]];
+    const head = [['Employee', ...weekDates.map(d => {
+        const [year, month, day] = d.split('-').map(Number);
+        const dateObj = new Date(year, month - 1, day);
+        return `${dateObj.toLocaleDateString('en-US', {weekday:'short'})} ${dateObj.getDate()}`;
+    })]];
 
-              const staffInWeek = staff.filter(emp => 
-                  shifts.some(s => s.userId === emp.id && weekDates.includes(s.date))
-              );
-              
-              const displayStaff = staffInWeek.length > 0 ? staffInWeek : staff;
+    const staffInWeek = staff.filter(emp => 
+        shifts.some(s => s.userId === emp.id && weekDates.includes(s.date))
+    );
+    
+    const displayStaff = staffInWeek.length > 0 ? staffInWeek : staff;
 
-              const body = displayStaff.map(emp => {
-                  const row = [emp.name];
-                  weekDates.forEach(date => {
-                      const dayShifts = shifts.filter(s => s.userId === emp.id && s.date === date);
-                      if (dayShifts.length > 0) {
-                          row.push(dayShifts.map(s => `${s.startTime} to ${s.endTime}`).join('\n'));
-                      } else {
-                          row.push('-');
-                      }
-                  });
-                  return row;
-              });
+    const body = displayStaff.map(emp => {
+        const row = [emp.name];
+        weekDates.forEach(date => {
+            const dayShifts = shifts.filter(s => s.userId === emp.id && s.date === date);
+            if (dayShifts.length > 0) {
+                // Map through each shift, display times, calculate hours, and join them
+                const shiftStrings = dayShifts.map(s => {
+                    const [sH, sM] = s.startTime.split(':').map(Number);
+                    const [eH, eM] = s.endTime.split(':').map(Number);
+                    
+                    let startTotal = sH * 60 + sM;
+                    let endTotal = eH * 60 + eM;
+                    if (endTotal <= startTotal) endTotal += 1440; // Handles overnight shifts
+                    
+                    const durationHours = ((endTotal - startTotal) / 60).toFixed(1);
+                    return `${s.startTime} - ${s.endTime}\n(${durationHours} hrs)`;
+                });
+                row.push(shiftStrings.join('\n\n'));
+            } else {
+                row.push('-');
+            }
+        });
+        return row;
+    });
 
-              doc.autoTable({
-                  startY: 40,
-                  head: head,
-                  body: body,
-                  headStyles: {fillColor: [15, 23, 42]},
-                  styles: {fontSize: 10, cellPadding: 4, valign: 'middle'},
-                  alternateRowStyles: {fillColor: [248, 250, 252]}
-              });
+    doc.autoTable({
+        startY: 40,
+        head: head,
+        body: body,
+        headStyles: { fillColor: [15, 23, 42] },
+        styles: { fontSize: 9, cellPadding: 4, valign: 'middle', halign: 'center' },
+        columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } }, // Keep names left-aligned
+        alternateRowStyles: { fillColor: [248, 250, 252] }
+    });
 
-              doc.save(`UP_Vision_Schedule_Week_Of_${weekDates[0]}.pdf`);
-          };
+    doc.save(`UP_Vision_Schedule_Week_Of_${weekDates[0]}.pdf`);
+};
 
           return (
             <div className="space-y-6">
