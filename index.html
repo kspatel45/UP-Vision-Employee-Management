@@ -73,7 +73,7 @@
     const annualizedGross = gross * periods;
     
     // 2026 Canadian Basic Personal Amount (BPA)
-    const bpa = 15705; 
+    const bpa = 16452; 
     
     // Calculate taxable annual income (Income minus tax-free baseline)
     const annualizedTaxable = Math.max(0, annualizedGross - bpa);
@@ -114,7 +114,7 @@
   
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.text("Corporate Staff Payroll Statement (Semi-Monthly)", 14, 26);
+  doc.text("Mr Puffs - 17126328 Canada Inc. Payroll Statement", 14, 26);
   
   // Pay Stub Metadata Box
   doc.setDrawColor(226, 232, 240);
@@ -143,7 +143,7 @@
     ['Federal Income Tax', '15.0%', `$${deductions.fedTax.toFixed(2)}`],
     ['Provincial Income Tax', '5.0%', `$${deductions.provTax.toFixed(2)}`],
     ['CPP (Canada Pension Plan)', '5.95%', `$${deductions.cpp.toFixed(2)}`],
-    ['EI (Employment Insurance)', '1.66%', `$${deductions.ei.toFixed(2)}`],
+    ['EI (Employment Insurance)', '1.63%', `$${deductions.ei.toFixed(2)}`],
     ['Total Statutory Deductions', '', `$${deductions.totalDeductions.toFixed(2)}`]
   ];
 
