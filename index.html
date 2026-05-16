@@ -68,22 +68,40 @@
             return colors[Math.abs(hash) % colors.length];
         };
 
-        const calculateNet = (gross) => {
-            const fedTax = gross * 0.15;
-            const provTax = gross * 0.05;
-            const cpp = gross * 0.0595;
-            const ei = gross * 0.0166;
-            const totalDeductions = fedTax + provTax + cpp + ei;
-            return {
-                gross,
-                fedTax,
-                provTax,
-                cpp,
-                ei,
-                totalDeductions,
-                net: gross - totalDeductions
-            };
-        };
+       const calculateNet = (gross) => {
+    const periods = 24; // Updated for semi-monthly pay periods
+    const annualizedGross = gross * periods;
+    
+    // 2026 Canadian Basic Personal Amount (BPA)
+    const bpa = 15705; 
+    
+    // Calculate taxable annual income (Income minus tax-free baseline)
+    const annualizedTaxable = Math.max(0, annualizedGross - bpa);
+    
+    // Annual Tax Calculations (15% Fed, 5% Prov on taxable portion)
+    const annualFedTax = annualizedTaxable * 0.15;
+    const annualProvTax = annualizedTaxable * 0.05;
+    
+    // De-annualize taxes back down to this specific semi-monthly pay stub
+    const fedTax = annualFedTax / periods;
+    const provTax = annualProvTax / periods;
+    
+    // Statutory Deductions
+    const cpp = gross * 0.0595; // CPP at 5.95%
+    const ei = gross * 0.0163;  // EI at 1.63%
+    
+    const totalDeductions = fedTax + provTax + cpp + ei;
+    
+    return {
+        gross,
+        fedTax,
+        provTax,
+        cpp,
+        ei,
+        totalDeductions,
+        net: gross - totalDeductions
+    };
+};
 
         const generatePayStubPDF = (employee, hours, rate, deductions, start, end) => {
   const { jsPDF } = window.jspdf;
@@ -96,7 +114,7 @@
   
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.text("Corporate Staff Payroll Statement", 14, 26);
+  doc.text("Corporate Staff Payroll Statement (Semi-Monthly)", 14, 26);
   
   // Pay Stub Metadata Box
   doc.setDrawColor(226, 232, 240);
