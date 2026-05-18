@@ -254,7 +254,7 @@ const generatePayStubPDF = (employee, deductions, start, end, ytdTotals) => {
                   {activeTab === 'dashboard' && <Dashboard user={loggedInProfile} punches={punches} />}
                   {activeTab === 'schedule' && <TimeGridSchedule user={loggedInProfile} shifts={shifts} staff={staff} />}
                   {activeTab === 'pay' && <EarningsTab user={loggedInProfile} punches={punches} staff={staff} locations={locations} payments={payments} />}
-                  {activeTab === 'payments_admin' && <PaymentsAdmin user={loggedInProfile} punches={punches} staff={staff} payments={payments} />}
+                 {activeTab === 'payments_admin' && <PaymentsAdmin user={loggedInProfile} punches={punches} staff={staff} payments={payments} db={db} />}
                   {activeTab === 'staff' && <StaffManager user={loggedInProfile} staff={staff} locations={locations} />}
                   {activeTab === 'settings' && <LocationsManager user={loggedInProfile} locations={locations} />}
                 </div>
@@ -877,7 +877,7 @@ const generatePayStubPDF = (employee, deductions, start, end, ytdTotals) => {
           );
         };
 
-const PaymentsAdmin = ({ user, punches, staff, payments }) => {
+const PaymentsAdmin = ({ user, punches, staff, payments, db }) => {
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [manualHours, setManualHours] = useState('');
   const [statHours, setStatHours] = useState('');
