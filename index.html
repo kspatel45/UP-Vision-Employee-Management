@@ -876,16 +876,15 @@ const generatePayStubPDF = (employee, deductions, start, end, ytdTotals) => {
             </div>
           );
         };
-
-const PaymentsAdmin = ({ user, punches, staff, payments, db }) => {
+const PaymentsAdmin = ({ user, punches, staff, payments }) => {
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [manualHours, setManualHours] = useState('');
   const [statHours, setStatHours] = useState('');
   const [payPeriodStart, setPayPeriodStart] = useState('');
   const [payPeriodEnd, setPayPeriodEnd] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleGenerateManualStub = async () => {
+  const handleGenerateManualStub = () => {
+    // 1. Validation Check
     if (!selectedStaffId || !manualHours || !payPeriodStart || !payPeriodEnd) {
       alert("Please fill out all operational fields to generate the pay stub.");
       return;
@@ -894,52 +893,33 @@ const PaymentsAdmin = ({ user, punches, staff, payments, db }) => {
     const employee = staff.find(s => s.id === selectedStaffId);
     if (!employee) return;
 
-    setIsProcessing(true);
-    try {
-        const hourlyRate = parseFloat(employee.hourlyRate) || 16.55;
-        
-        // Calculate the current stub payload utilizing the formula framework
-        const currentDeductions = calculateNet(manualHours, statHours, hourlyRate);
+    const hourlyRate = parseFloat(employee.hourlyRate) || 16.55;
+    
+    // 2. Perform Local Net Math Calculations
+    const currentDeductions = calculateNet(manualHours, statHours, hourlyRate);
 
-        // Calculate YTD totals from historical data stored in the database
-        const historicPayments = payments.filter(p => p.userId === employee.id);
-        const ytdTotals = {
-            baseEarnings: historicPayments.reduce((sum, p) => sum + (p.baseEarnings || 0), 0) + currentDeductions.baseEarnings,
-            otEarnings: historicPayments.reduce((sum, p) => sum + (p.otEarnings || 0), 0) + currentDeductions.otEarnings,
-            statEarnings: historicPayments.reduce((sum, p) => sum + (p.statEarnings || 0), 0) + currentDeductions.statEarnings,
-            vacationPay: historicPayments.reduce((sum, p) => sum + (p.vacationPay || 0), 0) + currentDeductions.vacationPay,
-            gross: historicPayments.reduce((sum, p) => sum + (p.gross || 0), 0) + currentDeductions.gross,
-            fedTax: historicPayments.reduce((sum, p) => sum + (p.fedTax || 0), 0) + currentDeductions.fedTax,
-            provTax: historicPayments.reduce((sum, p) => sum + (p.provTax || 0), 0) + currentDeductions.provTax,
-            cpp: historicPayments.reduce((sum, p) => sum + (p.cpp || 0), 0) + currentDeductions.cpp,
-            ei: historicPayments.reduce((sum, p) => sum + (p.ei || 0), 0) + currentDeductions.ei,
-            totalDeductions: historicPayments.reduce((sum, p) => sum + (p.totalDeductions || 0), 0) + currentDeductions.totalDeductions,
-            net: historicPayments.reduce((sum, p) => sum + (p.net || 0), 0) + currentDeductions.net
-        };
+    // 3. Compile YTD Totals using local historical memory arrays
+    const historicPayments = payments.filter(p => p.userId === employee.id);
+    const ytdTotals = {
+        baseEarnings: historicPayments.reduce((sum, p) => sum + (p.baseEarnings || 0), 0) + currentDeductions.baseEarnings,
+        otEarnings: historicPayments.reduce((sum, p) => sum + (p.otEarnings || 0), 0) + currentDeductions.otEarnings,
+        statEarnings: historicPayments.reduce((sum, p) => sum + (p.statEarnings || 0), 0) + currentDeductions.statEarnings,
+        vacationPay: historicPayments.reduce((sum, p) => sum + (p.vacationPay || 0), 0) + currentDeductions.vacationPay,
+        gross: historicPayments.reduce((sum, p) => sum + (p.gross || 0), 0) + currentDeductions.gross,
+        fedTax: historicPayments.reduce((sum, p) => sum + (p.fedTax || 0), 0) + currentDeductions.fedTax,
+        provTax: historicPayments.reduce((sum, p) => sum + (p.provTax || 0), 0) + currentDeductions.provTax,
+        cpp: historicPayments.reduce((sum, p) => sum + (p.cpp || 0), 0) + currentDeductions.cpp,
+        ei: historicPayments.reduce((sum, p) => sum + (p.ei || 0), 0) + currentDeductions.ei,
+        totalDeductions: historicPayments.reduce((sum, p) => sum + (p.totalDeductions || 0), 0) + currentDeductions.totalDeductions,
+        net: historicPayments.reduce((sum, p) => sum + (p.net || 0), 0) + currentDeductions.net
+    };
 
-        // Write to Firebase
-        await addDoc(collection(db, 'artifacts', 'up-vision-staff-management', 'public', 'data', 'payments'), {
-            userId: employee.id,
-            userName: employee.name,
-            payPeriodStart,
-            payPeriodEnd,
-            processedAt: Date.now(),
-            hourlyRate,
-            ...currentDeductions
-        });
+    // 4. Fire the local PDF Compiler Engine right away!
+    generatePayStubPDF(employee, currentDeductions, payPeriodStart, payPeriodEnd, ytdTotals);
 
-        // Generate and download the PDF
-        generatePayStubPDF(employee, currentDeductions, payPeriodStart, payPeriodEnd, ytdTotals);
-
-        // Reset state
-        setManualHours('');
-        setStatHours('');
-    } catch (error) {
-        console.error("Database connection fault context: ", error);
-        alert("Failed to write transaction safely to cloud server.");
-    } finally {
-        setIsProcessing(false);
-    }
+    // Clear inputs for the next entry
+    setManualHours('');
+    setStatHours('');
   };
 
   return (
@@ -949,7 +929,7 @@ const PaymentsAdmin = ({ user, punches, staff, payments, db }) => {
         <p className="text-sm font-bold text-slate-400 mt-1">Super-Admin Management Dashboard</p>
       </header>
 
-      {/* Manual Pay Stub Form Component Grid Panel */}
+      {/* Manual Pay Stub Input Generation Control Box */}
       <div className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
         <h2 className="text-xl font-black text-slate-900 mb-6 uppercase tracking-wider flex items-center gap-3">
@@ -1019,19 +999,18 @@ const PaymentsAdmin = ({ user, punches, staff, payments, db }) => {
 
           <button 
             onClick={handleGenerateManualStub}
-            disabled={isProcessing}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-black py-4 rounded-xl shadow-lg shadow-blue-600/20 uppercase tracking-wider text-xs transition-all active:scale-[0.98] h-[52px]"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-lg shadow-blue-600/20 uppercase tracking-wider text-xs transition-all active:scale-[0.98] h-[52px]"
           >
-            {isProcessing ? 'Saving to Cloud...' : 'Process & Download Pay Stub'}
+            Generate & Download PDF Pay Stub
           </button>
         </div>
       </div>
 
-      {/* Historic Logs Listing View */}
+      {/* Historical Ledger Table Panel */}
       <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden">
         <div className="p-8 border-b border-slate-50 bg-slate-50/50">
           <h2 className="text-lg font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
-            <CheckCircle className="text-emerald-500 w-5 h-5" /> Issued Payroll Statements Archive
+            <CheckCircle className="text-emerald-500 w-5 h-5" /> Recorded System Payroll History
           </h2>
         </div>
         <div className="overflow-x-auto">
@@ -1057,7 +1036,7 @@ const PaymentsAdmin = ({ user, punches, staff, payments, db }) => {
               ))}
               {payments.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="p-10 text-center text-slate-400 font-bold">No historical payroll slips recorded in database yet.</td>
+                  <td colSpan="5" className="p-10 text-center text-slate-400 font-bold">No historical payroll slips pulled from server memory.</td>
                 </tr>
               )}
             </tbody>
@@ -1067,7 +1046,6 @@ const PaymentsAdmin = ({ user, punches, staff, payments, db }) => {
     </div>
   );
 };
-
         const StaffManager = ({ user, staff, locations }) => {
           const [showAdd, setShowAdd] = useState(false);
           const [editingId, setEditingId] = useState(null);
