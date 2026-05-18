@@ -885,51 +885,61 @@ const generatePayStubPDF = (employee, deductions, start, end, ytdTotals) => {
             </div>
           );
         };
-const PaymentsAdmin = ({ user, punches, staff, payments }) => {
-  const [selectedStaffId, setSelectedStaffId] = useState('');
-  const [manualHours, setManualHours] = useState('');
-  const [statHours, setStatHours] = useState('');
-  const [payPeriodStart, setPayPeriodStart] = useState('');
-  const [payPeriodEnd, setPayPeriodEnd] = useState('');
+const handleGenerateManualStub = () => {
+  // 1. Validation Check
+  if (!selectedStaffId || !payPeriodStart || !payPeriodEnd) {
+    alert("Please select an employee and set the pay period dates.");
+    return;
+  }
 
-  const handleGenerateManualStub = () => {
-    // 1. Validation Check
-    if (!selectedStaffId || !manualHours || !payPeriodStart || !payPeriodEnd) {
-      alert("Please fill out all operational fields to generate the pay stub.");
-      return;
-    }
+  const employee = staff.find(s => s.id === selectedStaffId);
+  if (!employee) {
+    alert("Employee profile not found.");
+    return;
+  }
 
-    const employee = staff.find(s => s.id === selectedStaffId);
-    if (!employee) return;
+  // 2. Force Safe Numeric Conversion (fixes potential NaN crashes)
+  const hourlyRate = parseFloat(employee.hourlyRate) || 16.55;
+  const parsedRegHours = parseFloat(manualHours) || 0;
+  const parsedStatHours = parseFloat(statHours) || 0;
 
-    const hourlyRate = parseFloat(employee.hourlyRate) || 16.55;
-    
-    // 2. Perform Local Net Math Calculations
-    const currentDeductions = calculateNet(manualHours, statHours, hourlyRate);
+  // Prevent processing an empty check
+  if (parsedRegHours === 0 && parsedStatHours === 0) {
+    alert("Please enter hours worked or statutory holiday hours.");
+    return;
+  }
 
-    // 3. Compile YTD Totals using local historical memory arrays
-    const historicPayments = payments.filter(p => p.userId === employee.id);
+  try {
+    // 3. Perform Local Calculations
+    const currentDeductions = calculateNet(parsedRegHours, parsedStatHours, hourlyRate);
+
+    // 4. Compile YTD Totals cleanly
+    const historicPayments = Array.isArray(payments) ? payments.filter(p => p.userId === employee.id) : [];
     const ytdTotals = {
-        baseEarnings: historicPayments.reduce((sum, p) => sum + (p.baseEarnings || 0), 0) + currentDeductions.baseEarnings,
-        otEarnings: historicPayments.reduce((sum, p) => sum + (p.otEarnings || 0), 0) + currentDeductions.otEarnings,
-        statEarnings: historicPayments.reduce((sum, p) => sum + (p.statEarnings || 0), 0) + currentDeductions.statEarnings,
-        vacationPay: historicPayments.reduce((sum, p) => sum + (p.vacationPay || 0), 0) + currentDeductions.vacationPay,
-        gross: historicPayments.reduce((sum, p) => sum + (p.gross || 0), 0) + currentDeductions.gross,
-        fedTax: historicPayments.reduce((sum, p) => sum + (p.fedTax || 0), 0) + currentDeductions.fedTax,
-        provTax: historicPayments.reduce((sum, p) => sum + (p.provTax || 0), 0) + currentDeductions.provTax,
-        cpp: historicPayments.reduce((sum, p) => sum + (p.cpp || 0), 0) + currentDeductions.cpp,
-        ei: historicPayments.reduce((sum, p) => sum + (p.ei || 0), 0) + currentDeductions.ei,
-        totalDeductions: historicPayments.reduce((sum, p) => sum + (p.totalDeductions || 0), 0) + currentDeductions.totalDeductions,
-        net: historicPayments.reduce((sum, p) => sum + (p.net || 0), 0) + currentDeductions.net
+        baseEarnings: historicPayments.reduce((sum, p) => sum + (parseFloat(p.baseEarnings) || 0), 0) + currentDeductions.baseEarnings,
+        otEarnings: historicPayments.reduce((sum, p) => sum + (parseFloat(p.otEarnings) || 0), 0) + currentDeductions.otEarnings,
+        statEarnings: historicPayments.reduce((sum, p) => sum + (parseFloat(p.statEarnings) || 0), 0) + currentDeductions.statEarnings,
+        vacationPay: historicPayments.reduce((sum, p) => sum + (parseFloat(p.vacationPay) || 0), 0) + currentDeductions.vacationPay,
+        gross: historicPayments.reduce((sum, p) => sum + (parseFloat(p.gross) || 0), 0) + currentDeductions.gross,
+        fedTax: historicPayments.reduce((sum, p) => sum + (parseFloat(p.fedTax) || 0), 0) + currentDeductions.fedTax,
+        provTax: historicPayments.reduce((sum, p) => sum + (parseFloat(p.provTax) || 0), 0) + currentDeductions.provTax,
+        cpp: historicPayments.reduce((sum, p) => sum + (parseFloat(p.cpp) || 0), 0) + currentDeductions.cpp,
+        ei: historicPayments.reduce((sum, p) => sum + (parseFloat(p.ei) || 0), 0) + currentDeductions.ei,
+        totalDeductions: historicPayments.reduce((sum, p) => sum + (parseFloat(p.totalDeductions) || 0), 0) + currentDeductions.totalDeductions,
+        net: historicPayments.reduce((sum, p) => sum + (parseFloat(p.net) || 0), 0) + currentDeductions.net
     };
 
-    // 4. Fire the local PDF Compiler Engine right away!
+    // 5. Fire PDF Compiler Engine
     generatePayStubPDF(employee, currentDeductions, payPeriodStart, payPeriodEnd, ytdTotals);
 
-    // Clear inputs for the next entry
+    // Clear inputs safely
     setManualHours('');
     setStatHours('');
-  };
+  } catch (err) {
+    console.error("PDF Compilation Error Layout context:", err);
+    alert("Error building PDF layout structure: " + err.message);
+  }
+};
 
   return (
     <div className="space-y-10">
