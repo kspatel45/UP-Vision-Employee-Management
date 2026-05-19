@@ -1,9 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
-   
-    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UP Vision Staff Portal</title>
@@ -71,84 +68,58 @@
             return colors[Math.abs(hash) % colors.length];
         };
 
-       const calculateNet = (regularHours, statHours, rate) => {
-    const hourlyRate = parseFloat(rate) || 16.55;
-    const regHrs = parseFloat(regularHours) || 0;
-    const stHrs = parseFloat(statHours) || 0;
-
-    // 1. Overtime Math (Hours above 47.14)
-    let baseHours = regHrs;
-    let otHours = 0;
-    if (regHrs > 47.14) {
-        baseHours = 47.14;
-        otHours = regHrs - 47.14;
-    }
-
-    const baseEarnings = baseHours * hourlyRate;
-    const otEarnings = otHours * (hourlyRate * 1.5);
-    const statEarnings = stHrs * (hourlyRate * 1.5);
-
-    // 2. Regular Gross Earnings & Vacation Pay
-    const regularGrossEarnings = baseEarnings + otEarnings + statEarnings;
-    const vacationPay = regularGrossEarnings * 0.04; // 4% Vacation Pay
-    
-    // Total Gross Pay including Vacation Pay
-    const gross = regularGrossEarnings + vacationPay;
-
-    // 3. Annualization with BPA for Semi-Monthly Payroll (24 Periods)
-    const periods = 24;
+       const calculateNet = (gross) => {
+    const periods = 24; // Updated for semi-monthly pay periods
     const annualizedGross = gross * periods;
-    const bpa = 15705; // 2026 Canadian Basic Personal Amount
     
+    // 2026 Canadian Basic Personal Amount (BPA)
+    const bpa = 16452; 
+    
+    // Calculate taxable annual income (Income minus tax-free baseline)
     const annualizedTaxable = Math.max(0, annualizedGross - bpa);
+    
+    // Annual Tax Calculations (15% Fed, 5% Prov on taxable portion)
     const annualFedTax = annualizedTaxable * 0.15;
     const annualProvTax = annualizedTaxable * 0.05;
     
+    // De-annualize taxes back down to this specific semi-monthly pay stub
     const fedTax = annualFedTax / periods;
     const provTax = annualProvTax / periods;
     
-    // 4. Statutory Premiums
+    // Statutory Deductions
     const cpp = gross * 0.0595; // CPP at 5.95%
     const ei = gross * 0.0163;  // EI at 1.63%
     
     const totalDeductions = fedTax + provTax + cpp + ei;
-    const net = gross - totalDeductions;
     
     return {
-        baseHours,
-        otHours,
-        stHours,
-        baseEarnings,
-        otEarnings,
-        statEarnings,
-        vacationPay,
         gross,
         fedTax,
         provTax,
         cpp,
         ei,
         totalDeductions,
-        net
+        net: gross - totalDeductions
     };
 };
-const generatePayStubPDF = (employee, deductions, start, end, ytdTotals) => {
-  // These two lines extract the engines safely from the global scripts loaded above
-  const { jsPDF } = window.jspdf; 
+
+        const generatePayStubPDF = (employee, hours, rate, deductions, start, end) => {
+  const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
 
-  // Company Branding Header
+  // Company Header
   doc.setFontSize(22);
   doc.setFont("helvetica", "bold");
-  doc.text("UP VISION", 14, 20);
+  doc.text("Mr Puffs Bramalea", 14, 20);
   
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.text("Corporate Staff Payroll Statement (Semi-Monthly)", 14, 26);
+  doc.text("17126328 Canada Inc. Payroll Statement", 14, 26);
   
-  // Information Meta Matrix Box
+  // Pay Stub Metadata Box
   doc.setDrawColor(226, 232, 240);
   doc.setFillColor(248, 250, 252);
-  doc.rect(14, 32, 182, 26, "FD");
+  doc.rect(14, 32, 182, 24, "FD");
   
   doc.setFont("helvetica", "bold");
   doc.text("Employee Name:", 18, 40);
@@ -160,60 +131,58 @@ const generatePayStubPDF = (employee, deductions, start, end, ytdTotals) => {
   doc.text(`${start} to ${end}`, 50, 46);
   doc.text(`${new Date().toISOString().split('T')[0]}`, 50, 52);
 
-  // Earnings Table Matrix (Current vs Year-to-Date)
-  const earningsHead = [['Earnings Category', 'Hours', 'Rate', 'Current Amount', 'YTD Cumulative']];
+  // Table Data Structures
+  const earningsHead = [['Earnings Breakdown', 'Hours', 'Rate', 'Total Amount']];
   const earningsBody = [
-    ['Regular Base Pay', deductions.baseHours.toFixed(2), `$${parseFloat(employee.hourlyRate || 16.55).toFixed(2)}`, `$${deductions.baseEarnings.toFixed(2)}`, `$${ytdTotals.baseEarnings.toFixed(2)}`],
-    ['Overtime Premium (1.5x)', deductions.otHours.toFixed(2), `$${(parseFloat(employee.hourlyRate || 16.55) * 1.5).toFixed(2)}`, `$${deductions.otEarnings.toFixed(2)}`, `$${ytdTotals.otEarnings.toFixed(2)}`],
-    ['Statutory Holiday Pay (1.5x)', deductions.stHours.toFixed(2), `$${(parseFloat(employee.hourlyRate || 16.55) * 1.5).toFixed(2)}`, `$${deductions.statEarnings.toFixed(2)}`, `$${ytdTotals.statEarnings.toFixed(2)}`],
-    ['Vacation Pay Accrual (4%)', '', '4.00%', `$${deductions.vacationPay.toFixed(2)}`, `$${ytdTotals.vacationPay.toFixed(2)}`],
-    ['Gross Earnings Total', '', '', `$${deductions.gross.toFixed(2)}`, `$${ytdTotals.gross.toFixed(2)}`]
+    ['Regular Hourly Base Pay', parseFloat(hours).toFixed(2), `$${parseFloat(rate).toFixed(2)}`, `$${deductions.gross.toFixed(2)}`],
+    ['Gross Earnings Total', '', '', `$${deductions.gross.toFixed(2)}`]
   ];
 
-  // Statutory Deductions Matrix Table
-  const deductionsHead = [['Statutory Deduction Details', 'Percentage Rate', 'Current Withheld', 'YTD Withheld']];
+  const deductionsHead = [['Statutory Deduction Details', 'Percentage / Rate', 'Amount Withheld']];
   const deductionsBody = [
-    ['Federal Income Tax', '15.00%', `$${deductions.fedTax.toFixed(2)}`, `$${ytdTotals.fedTax.toFixed(2)}`],
-    ['Provincial Income Tax', '5.00%', `$${deductions.provTax.toFixed(2)}`, `$${ytdTotals.provTax.toFixed(2)}`],
-    ['CPP (Canada Pension Plan)', '5.95%', `$${deductions.cpp.toFixed(2)}`, `$${ytdTotals.cpp.toFixed(2)}`],
-    ['EI (Employment Insurance)', '1.63%', `$${deductions.ei.toFixed(2)}`, `$${ytdTotals.ei.toFixed(2)}`],
-    ['Total Deductions Withheld', '', `$${deductions.totalDeductions.toFixed(2)}`, `$${ytdTotals.totalDeductions.toFixed(2)}`]
+    ['Federal Income Tax', '15.0%', `$${deductions.fedTax.toFixed(2)}`],
+    ['Provincial Income Tax', '5.0%', `$${deductions.provTax.toFixed(2)}`],
+    ['CPP (Canada Pension Plan)', '5.95%', `$${deductions.cpp.toFixed(2)}`],
+    ['EI (Employment Insurance)', '1.63%', `$${deductions.ei.toFixed(2)}`],
+    ['Total Statutory Deductions', '', `$${deductions.totalDeductions.toFixed(2)}`]
   ];
 
+  // Render Earnings Table
   doc.autoTable({
-    startY: 66,
+    startY: 64,
     head: earningsHead,
     body: earningsBody,
     headStyles: { fillColor: [15, 23, 42] },
-    styles: { fontSize: 9, cellPadding: 3.5 },
+    styles: { fontSize: 10, cellPadding: 4 },
     footStyles: { fontStyle: 'bold' }
   });
 
+  // Render Deductions Table
   doc.autoTable({
-    startY: doc.lastAutoTable.finalY + 8,
+    startY: doc.lastAutoTable.finalY + 10,
     head: deductionsHead,
     body: deductionsBody,
     headStyles: { fillColor: [71, 85, 105] },
-    styles: { fontSize: 9, cellPadding: 3.5 }
+    styles: { fontSize: 10, cellPadding: 4 }
   });
 
-  // Net Take-Home Pay Highlight Banner Accent
-  const finalY = doc.lastAutoTable.finalY + 10;
+  // Net Pay Summary Banner Area
+  const finalY = doc.lastAutoTable.finalY + 15;
   doc.setFillColor(239, 246, 255);
   doc.setDrawColor(191, 219, 254);
-  doc.rect(14, finalY, 182, 18, "FD");
+  doc.rect(14, finalY, 182, 20, "FD");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.text("NET TAKE-HOME PAY STATEMENT:", 20, finalY + 11);
-  doc.text(`$${deductions.net.toFixed(2)}`, 115, finalY + 11);
-  doc.setFontSize(9);
-  doc.text(`YTD Net: $${ytdTotals.net.toFixed(2)}`, 155, finalY + 11);
+  doc.setFontSize(14);
+  doc.text("NET TAKE-HOME PAY:", 20, finalY + 13);
+  doc.text(`$${deductions.net.toFixed(2)}`, 140, finalY + 13);
 
+  // Footer note
   doc.setFontSize(8);
   doc.setFont("helvetica", "italic");
-  doc.text("This is a verified administrative statement securely logged within the UP Vision cloud configuration registry.", 14, finalY + 24);
+  doc.text("This is an official administrative payroll copy prepared through the UP Vision Staff Portal.", 14, finalY + 30);
 
+  // Trigger browser download action
   doc.save(`PayStub_${employee.name.replace(/\s+/g, '_')}_${start}.pdf`);
 };
 
@@ -258,7 +227,7 @@ const generatePayStubPDF = (employee, deductions, start, end, ytdTotals) => {
                   {activeTab === 'dashboard' && <Dashboard user={loggedInProfile} punches={punches} />}
                   {activeTab === 'schedule' && <TimeGridSchedule user={loggedInProfile} shifts={shifts} staff={staff} />}
                   {activeTab === 'pay' && <EarningsTab user={loggedInProfile} punches={punches} staff={staff} locations={locations} payments={payments} />}
-                 {activeTab === 'payments_admin' && <PaymentsAdmin user={loggedInProfile} punches={punches} staff={staff} payments={payments} db={db} />}
+                  {activeTab === 'payments_admin' && <PaymentsAdmin user={loggedInProfile} punches={punches} staff={staff} payments={payments} />}
                   {activeTab === 'staff' && <StaffManager user={loggedInProfile} staff={staff} locations={locations} />}
                   {activeTab === 'settings' && <LocationsManager user={loggedInProfile} locations={locations} />}
                 </div>
@@ -880,79 +849,54 @@ const generatePayStubPDF = (employee, deductions, start, end, ytdTotals) => {
             </div>
           );
         };
-const handleGenerateManualStub = () => {
-  // 1. Validation Check
-  if (!selectedStaffId || !payPeriodStart || !payPeriodEnd) {
-    alert("Please select an employee and set the pay period dates.");
-    return;
-  }
 
-  const employee = staff.find(s => s.id === selectedStaffId);
-  if (!employee) {
-    alert("Employee profile not found.");
-    return;
-  }
+        const PaymentsAdmin = ({ user, punches, staff, payments }) => {
+  // State for the Manual Pay Stub Generator
+  const [selectedStaffId, setSelectedStaffId] = useState('');
+  const [manualHours, setManualHours] = useState('');
+  const [payPeriodStart, setPayPeriodStart] = useState('');
+  const [payPeriodEnd, setPayPeriodEnd] = useState('');
 
-  // 2. Force Safe Numeric Conversion (fixes potential NaN crashes)
-  const hourlyRate = parseFloat(employee.hourlyRate) || 16.55;
-  const parsedRegHours = parseFloat(manualHours) || 0;
-  const parsedStatHours = parseFloat(statHours) || 0;
+  // Helper local function to generate PDF Pay Stubs cleanly
+  const handleGenerateManualStub = () => {
+    if (!selectedStaffId || !manualHours || !payPeriodStart || !payPeriodEnd) {
+      alert("Please fill out all fields to generate the pay stub.");
+      return;
+    }
 
-  // Prevent processing an empty check
-  if (parsedRegHours === 0 && parsedStatHours === 0) {
-    alert("Please enter hours worked or statutory holiday hours.");
-    return;
-  }
+    const employee = staff.find(s => s.id === selectedStaffId);
+    if (!employee) return;
 
-  try {
-    // 3. Perform Local Calculations
-    const currentDeductions = calculateNet(parsedRegHours, parsedStatHours, hourlyRate);
+    const hourlyRate = parseFloat(employee.hourlyRate) || 16.55; 
+    const grossPay = hourlyRate * parseFloat(manualHours);
+    
+    // Call your exact global math deduction logic
+    const deductions = calculateNet(grossPay);
 
-    // 4. Compile YTD Totals cleanly
-    const historicPayments = Array.isArray(payments) ? payments.filter(p => p.userId === employee.id) : [];
-    const ytdTotals = {
-        baseEarnings: historicPayments.reduce((sum, p) => sum + (parseFloat(p.baseEarnings) || 0), 0) + currentDeductions.baseEarnings,
-        otEarnings: historicPayments.reduce((sum, p) => sum + (parseFloat(p.otEarnings) || 0), 0) + currentDeductions.otEarnings,
-        statEarnings: historicPayments.reduce((sum, p) => sum + (parseFloat(p.statEarnings) || 0), 0) + currentDeductions.statEarnings,
-        vacationPay: historicPayments.reduce((sum, p) => sum + (parseFloat(p.vacationPay) || 0), 0) + currentDeductions.vacationPay,
-        gross: historicPayments.reduce((sum, p) => sum + (parseFloat(p.gross) || 0), 0) + currentDeductions.gross,
-        fedTax: historicPayments.reduce((sum, p) => sum + (parseFloat(p.fedTax) || 0), 0) + currentDeductions.fedTax,
-        provTax: historicPayments.reduce((sum, p) => sum + (parseFloat(p.provTax) || 0), 0) + currentDeductions.provTax,
-        cpp: historicPayments.reduce((sum, p) => sum + (parseFloat(p.cpp) || 0), 0) + currentDeductions.cpp,
-        ei: historicPayments.reduce((sum, p) => sum + (parseFloat(p.ei) || 0), 0) + currentDeductions.ei,
-        totalDeductions: historicPayments.reduce((sum, p) => sum + (parseFloat(p.totalDeductions) || 0), 0) + currentDeductions.totalDeductions,
-        net: historicPayments.reduce((sum, p) => sum + (parseFloat(p.net) || 0), 0) + currentDeductions.net
-    };
-
-    // 5. Fire PDF Compiler Engine
-    generatePayStubPDF(employee, currentDeductions, payPeriodStart, payPeriodEnd, ytdTotals);
-
-    // Clear inputs safely
-    setManualHours('');
-    setStatHours('');
-  } catch (err) {
-    console.error("PDF Compilation Error Layout context:", err);
-    alert("Error building PDF layout structure: " + err.message);
-  }
-};
+    // Call PDF Constructor Engine
+    generatePayStubPDF(employee, manualHours, hourlyRate, deductions, payPeriodStart, payPeriodEnd);
+  };
 
   return (
     <div className="space-y-10">
-      <header>
-        <h1 className="text-4xl font-black text-slate-900 tracking-tight">Process Payments</h1>
-        <p className="text-sm font-bold text-slate-400 mt-1">Super-Admin Management Dashboard</p>
+      {/* 1. TOP HEADER SECTION */}
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight">Process Payments</h1>
+          <p className="text-sm font-bold text-slate-400 mt-1">Super-Admin Management Dashboard</p>
+        </div>
       </header>
 
-      {/* Manual Pay Stub Input Generation Control Box */}
+      {/* 2. MANUAL PAY STUB GENERATOR INTERFACE CARD */}
       <div className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
         <h2 className="text-xl font-black text-slate-900 mb-6 uppercase tracking-wider flex items-center gap-3">
           <FileSpreadsheet className="text-blue-600 w-5 h-5"/> Manual Pay Stub Generator
         </h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5 items-end">
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Employee Profile</label>
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Employee</label>
             <select 
               className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-sm focus:ring-2 ring-blue-500 outline-none"
               value={selectedStaffId} 
@@ -966,31 +910,17 @@ const handleGenerateManualStub = () => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Total Scheduled Hours (Base + OT)</label>
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Total Hours</label>
             <input 
               type="number" 
-              step="0.01"
-              placeholder="e.g. 52.5" 
+              step="0.1"
+              placeholder="e.g. 75.5" 
               className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-sm focus:ring-2 ring-blue-500 outline-none"
               value={manualHours}
               onChange={e => setManualHours(e.target.value)}
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Statutory Holiday Hours</label>
-            <input 
-              type="number" 
-              step="0.01"
-              placeholder="e.g. 8.0" 
-              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-sm focus:ring-2 ring-blue-500 outline-none"
-              value={statHours}
-              onChange={e => setStatHours(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Period Start</label>
             <input 
@@ -1015,16 +945,16 @@ const handleGenerateManualStub = () => {
             onClick={handleGenerateManualStub}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-lg shadow-blue-600/20 uppercase tracking-wider text-xs transition-all active:scale-[0.98] h-[52px]"
           >
-            Generate & Download PDF Pay Stub
+            Download Pay Stub
           </button>
         </div>
       </div>
 
-      {/* Historical Ledger Table Panel */}
+      {/* 3. LIVE STAFF TRACKING RUNNING OVERVIEW SUMMARY */}
       <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden">
         <div className="p-8 border-b border-slate-50 bg-slate-50/50">
           <h2 className="text-lg font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
-            <CheckCircle className="text-emerald-500 w-5 h-5" /> Recorded System Payroll History
+            <Users className="text-slate-700 w-5 h-5" /> Team Earnings & Hourly Summaries
           </h2>
         </div>
         <div className="overflow-x-auto">
@@ -1032,27 +962,32 @@ const handleGenerateManualStub = () => {
             <thead>
               <tr className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest">
                 <th className="p-5">Employee</th>
-                <th className="p-5">Pay Period Range</th>
-                <th className="p-5">Gross Paid</th>
-                <th className="p-5">Total Deductions</th>
-                <th className="p-5">Net Remitted</th>
+                <th className="p-5">Assigned Wage Base</th>
+                <th className="p-5">Total Historic Punches</th>
+                <th className="p-5">Processed Payroll Records</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm font-bold text-slate-700">
-              {payments.sort((a,b) => b.processedAt - a.processedAt).map((pay, i) => (
-                <tr key={i} className="hover:bg-slate-50/60 transition-colors">
-                  <td className="p-5 font-black text-slate-900">{pay.userName}</td>
-                  <td className="p-5 text-slate-400">{pay.payPeriodStart} to {pay.payPeriodEnd}</td>
-                  <td className="p-5 text-emerald-600">${parseFloat(pay.gross || 0).toFixed(2)}</td>
-                  <td className="p-5 text-red-500">${parseFloat(pay.totalDeductions || 0).toFixed(2)}</td>
-                  <td className="p-5 font-black text-slate-900">${parseFloat(pay.net || 0).toFixed(2)}</td>
-                </tr>
-              ))}
-              {payments.length === 0 && (
-                <tr>
-                  <td colSpan="5" className="p-10 text-center text-slate-400 font-bold">No historical payroll slips pulled from server memory.</td>
-                </tr>
-              )}
+              {staff.map(member => {
+                const staffPunches = punches.filter(p => p.userId === member.id);
+                const staffPayments = payments.filter(p => p.userId === member.id);
+                return (
+                  <tr key={member.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="p-5 font-black text-slate-900">{member.name}</td>
+                    <td className="p-5">${parseFloat(member.hourlyRate || 16.55).toFixed(2)} / hr</td>
+                    <td className="p-5">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-black bg-slate-100 text-slate-600">
+                        {staffPunches.length} records
+                      </span>
+                    </td>
+                    <td className="p-5">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-black ${staffPayments.length > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                        {staffPayments.length} Stub(s) Issued
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1060,6 +995,7 @@ const handleGenerateManualStub = () => {
     </div>
   );
 };
+
         const StaffManager = ({ user, staff, locations }) => {
           const [showAdd, setShowAdd] = useState(false);
           const [editingId, setEditingId] = useState(null);
