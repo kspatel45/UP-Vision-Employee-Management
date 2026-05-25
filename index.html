@@ -68,8 +68,15 @@
             return colors[Math.abs(hash) % colors.length];
         };
 
-const calculateNet = (gross) => {
+const calculateNet = (baseGrossPay) => {
     const periods = 24; // Semi-monthly pay periods
+    
+    // Calculate Vacation Pay at 4% of the base earnings
+    const vacationPay = baseGrossPay * 0.04;
+    
+    // Total Taxable Gross Pay includes base earnings + vacation pay
+    const gross = baseGrossPay + vacationPay;
+    
     const annualizedGross = gross * periods;
     
     // 2026 Canadian Basic Personal Amount (BPA)
@@ -93,6 +100,8 @@ const calculateNet = (gross) => {
     const totalDeductions = fedTax + provTax + cpp + ei;
     
     return {
+        baseGrossPay,
+        vacationPay,
         gross,
         fedTax,
         provTax,
@@ -140,14 +149,15 @@ const generatePayStubPDF = (employee, hours, overtimeHours, statHours, rate, ded
   const regularPayTotal = rHours * rRate;
   const overtimeRate = rRate * 1.5;
   const overtimePayTotal = oHours * overtimeRate;
-  const statPayTotal = sHours * rRate; // Statutory Holiday hours are paid at regular rate
+  const statPayTotal = sHours * rRate; 
 
   // Table Data Structures
-  const earningsHead = [['Earnings Breakdown', 'Hours', 'Rate', 'Total Amount']];
+  const earningsHead = [['Earnings Breakdown', 'Hours / Basis', 'Rate', 'Total Amount']];
   const earningsBody = [
     ['Regular Hourly Base Pay', rHours.toFixed(2), `$${rRate.toFixed(2)}`, `$${regularPayTotal.toFixed(2)}`],
     ['Overtime Premium Pay (1.5x)', oHours.toFixed(2), `$${overtimeRate.toFixed(2)}`, `$${overtimePayTotal.toFixed(2)}`],
     ['Statutory Holiday Pay', sHours.toFixed(2), `$${rRate.toFixed(2)}`, `$${statPayTotal.toFixed(2)}`],
+    ['Vacation Pay Accrual', '4.00% of Base', '', `$${deductions.vacationPay.toFixed(2)}`],
     ['Gross Earnings Total', '', '', `$${deductions.gross.toFixed(2)}`]
   ];
 
@@ -873,11 +883,11 @@ const generatePayStubPDF = (employee, hours, overtimeHours, statHours, rate, ded
         };
 
 const PaymentsAdmin = ({ user, punches, staff, payments }) => {
-  // States for the Manual Pay Stub Generator
+  // State for the Manual Pay Stub Generator
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [manualHours, setManualHours] = useState('');
   const [manualOvertimeHours, setManualOvertimeHours] = useState('');
-  const [manualStatHours, setManualStatHours] = useState(''); // New input state for Stat Holiday Hours
+  const [manualStatHours, setManualStatHours] = useState(''); 
   const [payPeriodStart, setPayPeriodStart] = useState('');
   const [payPeriodEnd, setPayPeriodEnd] = useState('');
 
@@ -891,22 +901,22 @@ const PaymentsAdmin = ({ user, punches, staff, payments }) => {
     const employee = staff.find(s => s.id === selectedStaffId);
     if (!employee) return;
 
-    // Strict parseFloat sanitation parsing values to '0' instead of allowing undefined empty strings to cause NaN errors
+    // Sanitation checks mapping empty values safely to '0' to explicitly prevent $NaN display bugs
     const hourlyRate = parseFloat(employee.hourlyRate) || 16.55; 
     const regularHrs = parseFloat(manualHours) || 0;
     const overtimeHrs = parseFloat(manualOvertimeHours) || 0;
     const statHrs = parseFloat(manualStatHours) || 0;
 
-    // Core Gross Math Formulation Breakdown 
+    // Core Base Earnings Formulation 
     const regularGross = hourlyRate * regularHrs;
     const overtimeGross = (hourlyRate * 1.5) * overtimeHrs;
     const statGross = hourlyRate * statHrs;
-    const totalGrossPay = regularGross + overtimeGross + statGross;
+    const totalBaseGross = regularGross + overtimeGross + statGross;
     
-    // Call your exact global math deduction logic
-    const deductions = calculateNet(totalGrossPay);
+    // Call calculation engine (Calculates internal vacation elements too)
+    const deductions = calculateNet(totalBaseGross);
 
-    // Call PDF Constructor Engine with clear separate variables
+    // Call PDF Constructor Engine with all variables accounted for
     generatePayStubPDF(employee, regularHrs, overtimeHrs, statHrs, hourlyRate, deductions, payPeriodStart, payPeriodEnd);
   };
 
@@ -927,7 +937,6 @@ const PaymentsAdmin = ({ user, punches, staff, payments }) => {
           <FileSpreadsheet className="text-blue-600 w-5 h-5"/> Manual Pay Stub Generator
         </h2>
         
-        {/* Adjusted tracking grid layout to grid-cols-7 for precise positioning */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 items-end">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Employee</label>
