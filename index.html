@@ -68,57 +68,42 @@
             return colors[Math.abs(hash) % colors.length];
         };
 
-     const calculateNet = (hours, rate, statHours = 0) => {
-    // 1. Overtime Calculation
-    const OT_THRESHOLD = 94.28;
-    let regHours = hours;
-    let otHours = 0;
-    
-    if (hours > OT_THRESHOLD) {
-        regHours = OT_THRESHOLD;
-        otHours = hours - OT_THRESHOLD;
-    }
-
-    const regPay = regHours * rate;
-    const otPay = otHours * (rate * 1.5);
-    
-    // 2. Stat Pay Calculation
-    const sPay = statHours * (rate * 1.5);
-    
-    // 3. Vacation Pay (4% on all earnings)
-    const subGross = regPay + otPay + sPay;
-    const vacPay = subGross * 0.04;
-    
-    // 4. Final Gross
-    const gross = subGross + vacPay;
-    
-    const periods = 24; 
+const calculateNet = (gross) => {
+    const periods = 24; // Semi-monthly pay periods
     const annualizedGross = gross * periods;
+    
+    // 2026 Canadian Basic Personal Amount (BPA)
     const bpa = 16452; 
+    
+    // Calculate taxable annual income (Income minus tax-free baseline)
     const annualizedTaxable = Math.max(0, annualizedGross - bpa);
     
+    // Annual Tax Calculations (15% Fed, 5% Prov on taxable portion)
     const annualFedTax = annualizedTaxable * 0.15;
     const annualProvTax = annualizedTaxable * 0.05;
+    
+    // De-annualize taxes back down to this specific semi-monthly pay stub
     const fedTax = annualFedTax / periods;
     const provTax = annualProvTax / periods;
     
-    const cpp = gross * 0.0595; 
-    const ei = gross * 0.0163;  
+    // Statutory Deductions
+    const cpp = gross * 0.0595; // CPP at 5.95%
+    const ei = gross * 0.0163;  // EI at 1.63%
     
     const totalDeductions = fedTax + provTax + cpp + ei;
     
     return {
-        regHours, regPay,
-        otHours, otPay,
-        statHours, sPay,
-        vacPay,
         gross,
-        fedTax, provTax, cpp, ei, totalDeductions,
-        net: gross - totalDeductions
+        fedTax,
+        provTax,
+        cpp,
+        ei,
+        totalDeductions,
+        net: Math.max(0, gross - totalDeductions)
     };
 };
 
-const generatePayStubPDF = (employee, hours, overtimeHours, rate, deductions, start, end) => {
+const generatePayStubPDF = (employee, hours, overtimeHours, statHours, rate, deductions, start, end) => {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
 
@@ -146,16 +131,23 @@ const generatePayStubPDF = (employee, hours, overtimeHours, rate, deductions, st
   doc.text(`${start} to ${end}`, 50, 46);
   doc.text(`${new Date().toISOString().split('T')[0]}`, 50, 52);
 
-  // Compute Base Earnings Breakdowns
-  const regularPayTotal = parseFloat(hours) * parseFloat(rate);
-  const overtimeRate = parseFloat(rate) * 1.5;
-  const overtimePayTotal = parseFloat(overtimeHours) * overtimeRate;
+  // Compute Base Earnings Breakdowns safely preventing string NaN concatenations
+  const rRate = parseFloat(rate) || 0;
+  const rHours = parseFloat(hours) || 0;
+  const oHours = parseFloat(overtimeHours) || 0;
+  const sHours = parseFloat(statHours) || 0;
+
+  const regularPayTotal = rHours * rRate;
+  const overtimeRate = rRate * 1.5;
+  const overtimePayTotal = oHours * overtimeRate;
+  const statPayTotal = sHours * rRate; // Statutory Holiday hours are paid at regular rate
 
   // Table Data Structures
   const earningsHead = [['Earnings Breakdown', 'Hours', 'Rate', 'Total Amount']];
   const earningsBody = [
-    ['Regular Hourly Base Pay', parseFloat(hours).toFixed(2), `$${parseFloat(rate).toFixed(2)}`, `$${regularPayTotal.toFixed(2)}`],
-    ['Overtime Premium Pay', parseFloat(overtimeHours).toFixed(2), `$${overtimeRate.toFixed(2)}`, `$${overtimePayTotal.toFixed(2)}`],
+    ['Regular Hourly Base Pay', rHours.toFixed(2), `$${rRate.toFixed(2)}`, `$${regularPayTotal.toFixed(2)}`],
+    ['Overtime Premium Pay (1.5x)', oHours.toFixed(2), `$${overtimeRate.toFixed(2)}`, `$${overtimePayTotal.toFixed(2)}`],
+    ['Statutory Holiday Pay', sHours.toFixed(2), `$${rRate.toFixed(2)}`, `$${statPayTotal.toFixed(2)}`],
     ['Gross Earnings Total', '', '', `$${deductions.gross.toFixed(2)}`]
   ];
 
@@ -881,35 +873,41 @@ const generatePayStubPDF = (employee, hours, overtimeHours, rate, deductions, st
         };
 
 const PaymentsAdmin = ({ user, punches, staff, payments }) => {
-  // State for the Manual Pay Stub Generator
+  // States for the Manual Pay Stub Generator
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [manualHours, setManualHours] = useState('');
-  const [manualOvertimeHours, setManualOvertimeHours] = useState('0'); // Added Overtime Input State
+  const [manualOvertimeHours, setManualOvertimeHours] = useState('');
+  const [manualStatHours, setManualStatHours] = useState(''); // New input state for Stat Holiday Hours
   const [payPeriodStart, setPayPeriodStart] = useState('');
   const [payPeriodEnd, setPayPeriodEnd] = useState('');
 
   // Helper local function to generate PDF Pay Stubs cleanly
   const handleGenerateManualStub = () => {
-    if (!selectedStaffId || !manualHours || manualOvertimeHours === '' || !payPeriodStart || !payPeriodEnd) {
-      alert("Please fill out all fields to generate the pay stub.");
+    if (!selectedStaffId || !payPeriodStart || !payPeriodEnd) {
+      alert("Please fill out all identity and date range fields to generate the pay stub.");
       return;
     }
 
     const employee = staff.find(s => s.id === selectedStaffId);
     if (!employee) return;
 
+    // Strict parseFloat sanitation parsing values to '0' instead of allowing undefined empty strings to cause NaN errors
     const hourlyRate = parseFloat(employee.hourlyRate) || 16.55; 
-    
-    // Core Gross Formula factoring regular hours and custom overtime premium rate (1.5x)
-    const regularGross = hourlyRate * parseFloat(manualHours);
-    const overtimeGross = (hourlyRate * 1.5) * parseFloat(manualOvertimeHours);
-    const totalGrossPay = regularGross + overtimeGross;
+    const regularHrs = parseFloat(manualHours) || 0;
+    const overtimeHrs = parseFloat(manualOvertimeHours) || 0;
+    const statHrs = parseFloat(manualStatHours) || 0;
+
+    // Core Gross Math Formulation Breakdown 
+    const regularGross = hourlyRate * regularHrs;
+    const overtimeGross = (hourlyRate * 1.5) * overtimeHrs;
+    const statGross = hourlyRate * statHrs;
+    const totalGrossPay = regularGross + overtimeGross + statGross;
     
     // Call your exact global math deduction logic
     const deductions = calculateNet(totalGrossPay);
 
-    // Call PDF Constructor Engine with all variables accounted for
-    generatePayStubPDF(employee, manualHours, manualOvertimeHours, hourlyRate, deductions, payPeriodStart, payPeriodEnd);
+    // Call PDF Constructor Engine with clear separate variables
+    generatePayStubPDF(employee, regularHrs, overtimeHrs, statHrs, hourlyRate, deductions, payPeriodStart, payPeriodEnd);
   };
 
   return (
@@ -929,12 +927,12 @@ const PaymentsAdmin = ({ user, punches, staff, payments }) => {
           <FileSpreadsheet className="text-blue-600 w-5 h-5"/> Manual Pay Stub Generator
         </h2>
         
-        {/* Adjusted Responsive Layout to support a 6-Column Alignment for smooth placement */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-5 items-end">
+        {/* Adjusted tracking grid layout to grid-cols-7 for precise positioning */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 items-end">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Employee</label>
             <select 
-              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-sm focus:ring-2 ring-blue-500 outline-none"
+              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
               value={selectedStaffId} 
               onChange={e => setSelectedStaffId(e.target.value)}
             >
@@ -950,23 +948,34 @@ const PaymentsAdmin = ({ user, punches, staff, payments }) => {
             <input 
               type="number" 
               step="0.1"
-              placeholder="e.g. 75.5" 
-              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-sm focus:ring-2 ring-blue-500 outline-none"
+              placeholder="e.g. 70" 
+              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
               value={manualHours}
               onChange={e => setManualHours(e.target.value)}
             />
           </div>
 
-          {/* NEW EXPLICIT OVERTIME HOURS SELECTION FIELD */}
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">OT Hours (1.5x)</label>
             <input 
               type="number" 
               step="0.1"
-              placeholder="e.g. 4.0" 
-              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-sm focus:ring-2 ring-blue-500 outline-none"
+              placeholder="e.g. 5" 
+              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
               value={manualOvertimeHours}
               onChange={e => setManualOvertimeHours(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Stat Hours</label>
+            <input 
+              type="number" 
+              step="0.1"
+              placeholder="e.g. 8" 
+              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
+              value={manualStatHours}
+              onChange={e => setManualStatHours(e.target.value)}
             />
           </div>
 
@@ -974,7 +983,7 @@ const PaymentsAdmin = ({ user, punches, staff, payments }) => {
             <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Period Start</label>
             <input 
               type="date" 
-              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-sm focus:ring-2 ring-blue-500 outline-none"
+              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
               value={payPeriodStart}
               onChange={e => setPayPeriodStart(e.target.value)}
             />
@@ -984,7 +993,7 @@ const PaymentsAdmin = ({ user, punches, staff, payments }) => {
             <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Period End</label>
             <input 
               type="date" 
-              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-sm focus:ring-2 ring-blue-500 outline-none"
+              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
               value={payPeriodEnd}
               onChange={e => setPayPeriodEnd(e.target.value)}
             />
@@ -992,7 +1001,7 @@ const PaymentsAdmin = ({ user, punches, staff, payments }) => {
 
           <button 
             onClick={handleGenerateManualStub}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-lg shadow-blue-600/20 uppercase tracking-wider text-xs transition-all active:scale-[0.98] h-[52px]"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-lg shadow-blue-600/20 uppercase tracking-wider text-[10px] transition-all active:scale-[0.98] h-[52px]"
           >
             Download Pay Stub
           </button>
