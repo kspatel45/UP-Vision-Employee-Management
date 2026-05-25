@@ -72,10 +72,11 @@ const calculateNet = (baseGrossPay) => {
     const periods = 24; // Semi-monthly pay periods
     
     // Calculate Vacation Pay at 4% of the base earnings
-    const vacationPay = baseGrossPay * 0.04;
+    const basePaySum = regularGross + overtimeGross + statGross;
+    const vacationPay = basePaySum * 0.04;
     
     // Total Taxable Gross Pay includes base earnings + vacation pay
-    const gross = baseGrossPay + vacationPay;
+   const gross = basePaySum + vacationPay;
     
     const annualizedGross = gross * periods;
     
