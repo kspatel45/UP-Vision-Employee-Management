@@ -68,147 +68,148 @@
             return colors[Math.abs(hash) % colors.length];
         };
 
-const calculateNet = (baseGrossPay) => {
-    const periods = 24; // Semi-monthly pay periods
-    
-    // Calculate Vacation Pay at 4% of the base earnings
-    const basePaySum = regularGross + overtimeGross + statGross;
-    const vacationPay = basePaySum * 0.04;
-    
-    // Total Taxable Gross Pay includes base earnings + vacation pay
-   const gross = basePaySum + vacationPay;
-    
-    const annualizedGross = gross * periods;
-    
-    // 2026 Canadian Basic Personal Amount (BPA)
-    const bpa = 16452; 
-    
-    // Calculate taxable annual income (Income minus tax-free baseline)
-    const annualizedTaxable = Math.max(0, annualizedGross - bpa);
-    
-    // Annual Tax Calculations (15% Fed, 5% Prov on taxable portion)
-    const annualFedTax = annualizedTaxable * 0.15;
-    const annualProvTax = annualizedTaxable * 0.05;
-    
-    // De-annualize taxes back down to this specific semi-monthly pay stub
-    const fedTax = annualFedTax / periods;
-    const provTax = annualProvTax / periods;
-    
-    // Statutory Deductions
-    const cpp = gross * 0.0595; // CPP at 5.95%
-    const ei = gross * 0.0163;  // EI at 1.63%
-    
-    const totalDeductions = fedTax + provTax + cpp + ei;
-    
-    return {
-        baseGrossPay,
-        vacationPay,
-        gross,
-        fedTax,
-        provTax,
-        cpp,
-        ei,
-        totalDeductions,
-        net: Math.max(0, gross - totalDeductions)
-    };
-};
+        // Global calculation module with correct mathematical boundaries
+        const calculateNet = (regularGross, overtimeGross, statGross) => {
+            const periods = 24; // Semi-monthly pay periods
+            
+            // Calculate vacation pay precisely on the aggregated gross baseline sum
+            const basePaySum = regularGross + overtimeGross + statGross;
+            const vacationPay = basePaySum * 0.04;
+            
+            // Total Taxable Gross Pay includes all earnings combined + vacation pay
+            const gross = basePaySum + vacationPay;
+            const annualizedGross = gross * periods;
+            
+            // 2026 Canadian Basic Personal Amount (BPA)
+            const bpa = 16452; 
+            
+            // Calculate taxable annual income (Income minus tax-free baseline)
+            const annualizedTaxable = Math.max(0, annualizedGross - bpa);
+            
+            // Annual Tax Calculations (15% Fed, 5% Prov on taxable portion)
+            const annualFedTax = annualizedTaxable * 0.15;
+            const annualProvTax = annualizedTaxable * 0.05;
+            
+            // De-annualize taxes back down to this specific semi-monthly pay stub
+            const fedTax = annualFedTax / periods;
+            const provTax = annualProvTax / periods;
+            
+            // Statutory Deductions
+            const cpp = gross * 0.0595; // CPP at 5.95%
+            const ei = gross * 0.0163;  // EI at 1.63%
+            
+            const totalDeductions = fedTax + provTax + cpp + ei;
+            
+            return {
+                baseGrossPay: basePaySum,
+                vacationPay,
+                gross,
+                fedTax,
+                provTax,
+                cpp,
+                ei,
+                totalDeductions,
+                net: Math.max(0, gross - totalDeductions)
+            };
+        };
 
-const generatePayStubPDF = (employee, hours, overtimeHours, statHours, rate, deductions, start, end) => {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
+        // Unified layout constructor processing explicit hourly structures
+        const generatePayStubPDF = (employee, hours, overtimeHours, statHours, rate, deductions, start, end) => {
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF();
 
-  // Company Header
-  doc.setFontSize(22);
-  doc.setFont("helvetica", "bold");
-  doc.text("Mr Puffs Bramalea", 14, 20);
-  
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text("17126328 Canada Inc. Payroll Statement", 14, 26);
-  
-  // Pay Stub Metadata Box
-  doc.setDrawColor(226, 232, 240);
-  doc.setFillColor(248, 250, 252);
-  doc.rect(14, 32, 182, 24, "FD");
-  
-  doc.setFont("helvetica", "bold");
-  doc.text("Employee Name:", 18, 40);
-  doc.text("Pay Period:", 18, 46);
-  doc.text("Payment Date:", 18, 52);
-  
-  doc.setFont("helvetica", "normal");
-  doc.text(`${employee.name}`, 50, 40);
-  doc.text(`${start} to ${end}`, 50, 46);
-  doc.text(`${new Date().toISOString().split('T')[0]}`, 50, 52);
+          // Company Header
+          doc.setFontSize(22);
+          doc.setFont("helvetica", "bold");
+          doc.text("Mr Puffs Bramalea", 14, 20);
+          
+          doc.setFontSize(10);
+          doc.setFont("helvetica", "normal");
+          doc.text("17126328 Canada Inc. Payroll Statement", 14, 26);
+          
+          // Pay Stub Metadata Box
+          doc.setDrawColor(226, 232, 240);
+          doc.setFillColor(248, 250, 252);
+          doc.rect(14, 32, 182, 24, "FD");
+          
+          doc.setFont("helvetica", "bold");
+          doc.text("Employee Name:", 18, 40);
+          doc.text("Pay Period:", 18, 46);
+          doc.text("Payment Date:", 18, 52);
+          
+          doc.setFont("helvetica", "normal");
+          doc.text(`${employee.name}`, 50, 40);
+          doc.text(`${start} to ${end}`, 50, 46);
+          doc.text(`${new Date().toISOString().split('T')[0]}`, 50, 52);
 
-  // Compute Base Earnings Breakdowns safely preventing string NaN concatenations
-  const rRate = parseFloat(rate) || 0;
-  const rHours = parseFloat(hours) || 0;
-  const oHours = parseFloat(overtimeHours) || 0;
-  const sHours = parseFloat(statHours) || 0;
+          // Standardize mathematical parsing definitions
+          const rRate = parseFloat(rate) || 0;
+          const rHours = parseFloat(hours) || 0;
+          const oHours = parseFloat(overtimeHours) || 0;
+          const sHours = parseFloat(statHours) || 0;
 
-  const regularPayTotal = rHours * rRate;
-  const overtimeRate = rRate * 1.5;
-  const overtimePayTotal = oHours * overtimeRate;
-  const statPayTotal = sHours * rRate; 
+          const regularPayTotal = rHours * rRate;
+          const overtimeRate = rRate * 1.5;
+          const overtimePayTotal = oHours * overtimeRate;
+          const statPayTotal = sHours * rRate; 
 
-  // Table Data Structures
-  const earningsHead = [['Earnings Breakdown', 'Hours / Basis', 'Rate', 'Total Amount']];
-  const earningsBody = [
-    ['Regular Hourly Base Pay', rHours.toFixed(2), `$${rRate.toFixed(2)}`, `$${regularPayTotal.toFixed(2)}`],
-    ['Overtime Premium Pay (1.5x)', oHours.toFixed(2), `$${overtimeRate.toFixed(2)}`, `$${overtimePayTotal.toFixed(2)}`],
-    ['Statutory Holiday Pay', sHours.toFixed(2), `$${rRate.toFixed(2)}`, `$${statPayTotal.toFixed(2)}`],
-    ['Vacation Pay Accrual', '4.00% of Base', '', `$${deductions.vacationPay.toFixed(2)}`],
-    ['Gross Earnings Total', '', '', `$${deductions.gross.toFixed(2)}`]
-  ];
+          // Table Data Structures
+          const earningsHead = [['Earnings Breakdown', 'Hours / Basis', 'Rate', 'Total Amount']];
+          const earningsBody = [
+            ['Regular Hourly Base Pay', rHours.toFixed(2), `$${rRate.toFixed(2)}`, `$${regularPayTotal.toFixed(2)}`],
+            ['Overtime Premium Pay (1.5x)', oHours.toFixed(2), `$${overtimeRate.toFixed(2)}`, `$${overtimePayTotal.toFixed(2)}`],
+            ['Statutory Holiday Pay', sHours.toFixed(2), `$${rRate.toFixed(2)}`, `$${statPayTotal.toFixed(2)}`],
+            ['Vacation Pay Accrual', '4.00% of Base Total', '', `$${deductions.vacationPay.toFixed(2)}`],
+            ['Gross Earnings Total', '', '', `$${deductions.gross.toFixed(2)}`]
+          ];
 
-  const deductionsHead = [['Statutory Deduction Details', 'Percentage / Rate', 'Amount Withheld']];
-  const deductionsBody = [
-    ['Federal Income Tax', '15.0%', `$${deductions.fedTax.toFixed(2)}`],
-    ['Provincial Income Tax', '5.0%', `$${deductions.provTax.toFixed(2)}`],
-    ['CPP (Canada Pension Plan)', '5.95%', `$${deductions.cpp.toFixed(2)}`],
-    ['EI (Employment Insurance)', '1.63%', `$${deductions.ei.toFixed(2)}`],
-    ['Total Statutory Deductions', '', `$${deductions.totalDeductions.toFixed(2)}`]
-  ];
+          const deductionsHead = [['Statutory Deduction Details', 'Percentage / Rate', 'Amount Withheld']];
+          const deductionsBody = [
+            ['Federal Income Tax', '15.0%', `$${deductions.fedTax.toFixed(2)}`],
+            ['Provincial Income Tax', '5.0%', `$${deductions.provTax.toFixed(2)}`],
+            ['CPP (Canada Pension Plan)', '5.95%', `$${deductions.cpp.toFixed(2)}`],
+            ['EI (Employment Insurance)', '1.63%', `$${deductions.ei.toFixed(2)}`],
+            ['Total Statutory Deductions', '', `$${deductions.totalDeductions.toFixed(2)}`]
+          ];
 
-  // Render Earnings Table
-  doc.autoTable({
-    startY: 64,
-    head: earningsHead,
-    body: earningsBody,
-    headStyles: { fillColor: [15, 23, 42] },
-    styles: { fontSize: 10, cellPadding: 4 },
-    footStyles: { fontStyle: 'bold' }
-  });
+          // Render Earnings Table
+          doc.autoTable({
+            startY: 64,
+            head: earningsHead,
+            body: earningsBody,
+            headStyles: { fillColor: [15, 23, 42] },
+            styles: { fontSize: 10, cellPadding: 4 },
+            footStyles: { fontStyle: 'bold' }
+          });
 
-  // Render Deductions Table
-  doc.autoTable({
-    startY: doc.lastAutoTable.finalY + 10,
-    head: deductionsHead,
-    body: deductionsBody,
-    headStyles: { fillColor: [71, 85, 105] },
-    styles: { fontSize: 10, cellPadding: 4 }
-  });
+          // Render Deductions Table
+          doc.autoTable({
+            startY: doc.lastAutoTable.finalY + 10,
+            head: deductionsHead,
+            body: deductionsBody,
+            headStyles: { fillColor: [71, 85, 105] },
+            styles: { fontSize: 10, cellPadding: 4 }
+          });
 
-  // Net Pay Summary Banner Area
-  const finalY = doc.lastAutoTable.finalY + 15;
-  doc.setFillColor(239, 246, 255);
-  doc.setDrawColor(191, 219, 254);
-  doc.rect(14, finalY, 182, 20, "FD");
+          // Net Pay Summary Banner Area
+          const finalY = doc.lastAutoTable.finalY + 15;
+          doc.setFillColor(239, 246, 255);
+          doc.setDrawColor(191, 219, 254);
+          doc.rect(14, finalY, 182, 20, "FD");
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text("NET TAKE-HOME PAY:", 20, finalY + 13);
-  doc.text(`$${deductions.net.toFixed(2)}`, 140, finalY + 13);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(14);
+          doc.text("NET TAKE-HOME PAY:", 20, finalY + 13);
+          doc.text(`$${deductions.net.toFixed(2)}`, 140, finalY + 13);
 
-  // Footer note
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "italic");
-  doc.text("This is an official administrative payroll copy prepared through the UP Vision Staff Portal.", 14, finalY + 30);
+          // Footer note
+          doc.setFontSize(8);
+          doc.setFont("helvetica", "italic");
+          doc.text("This is an official administrative payroll copy prepared through the UP Vision Staff Portal.", 14, finalY + 30);
 
-  // Trigger browser download action
-  doc.save(`PayStub_${employee.name.replace(/\s+/g, '_')}_${start}.pdf`);
-};
+          // Trigger browser download action
+          doc.save(`PayStub_${employee.name.replace(/\s+/g, '_')}_${start}.pdf`);
+        };
 
         function App() {
           const [user, setUser] = useState(null);
@@ -310,7 +311,6 @@ const generatePayStubPDF = (employee, hours, overtimeHours, statHours, rate, ded
           const menu = [
             { id: 'dashboard', label: 'Punch Clock', icon: ClockIcon, roles: ['admin_manager', 'admin_viewer'] },
             { id: 'schedule', label: 'Schedule', icon: CalendarDays, roles: ['employee', 'supervisor', 'admin_manager', 'admin_viewer'] },
-            
             { id: 'payments_admin', label: 'Process Payments', icon: CreditCard, roles: ['admin_manager'] },
             { id: 'staff', label: 'Staffing', icon: Users, roles: ['admin_manager', 'admin_viewer'] },
             { id: 'settings', label: 'Workplaces', icon: MapPin, roles: ['admin_manager'] },
@@ -376,22 +376,17 @@ const generatePayStubPDF = (employee, hours, overtimeHours, statHours, rate, ded
           }, []);
 
           const weekDates = useMemo(() => {
-  const current = new Date(baseDate);
-  const dayOfWeek = current.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
-  
-  // Hardcode the distance to Monday: If Sunday (0), go back 6 days. Otherwise, subtract (dayOfWeek - 1)
-  const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  
-  const monday = new Date(current);
-  monday.setDate(current.getDate() + distanceToMonday);
-  
-  // Explicitly generate the 7 days starting exactly on that Monday
-  return Array.from({ length: 7 }, (_, i) => {
-    const nextDay = new Date(monday);
-    nextDay.setDate(monday.getDate() + i);
-    return nextDay.toISOString().split('T')[0]; // Returns "YYYY-MM-DD"
-  });
-}, [baseDate]);
+            const current = new Date(baseDate);
+            const dayOfWeek = current.getDay(); 
+            const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+            const monday = new Date(current);
+            monday.setDate(current.getDate() + distanceToMonday);
+            return Array.from({ length: 7 }, (_, i) => {
+              const nextDay = new Date(monday);
+              nextDay.setDate(monday.getDate() + i);
+              return nextDay.toISOString().split('T')[0]; 
+            });
+          }, [baseDate]);
 
           const getEmployeeForSlot = (date, slotMinutes) => {
             return shifts.filter(s => {
@@ -434,63 +429,62 @@ const generatePayStubPDF = (employee, hours, overtimeHours, statHours, rate, ded
           };
 
           const handleExportSchedule = () => {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('landscape');
-    
-    doc.setFontSize(22); 
-    doc.text("UP VISION - WEEKLY SCHEDULE", 14, 20);
-    doc.setFontSize(12);
-    doc.text(`Week of: ${weekDates[0]} to ${weekDates[6]}`, 14, 30);
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('landscape');
+            
+            doc.setFontSize(22); 
+            doc.text("UP VISION - WEEKLY SCHEDULE", 14, 20);
+            doc.setFontSize(12);
+            doc.text(`Week of: ${weekDates[0]} to ${weekDates[6]}`, 14, 30);
 
-    const head = [['Employee', ...weekDates.map(d => {
-        const [year, month, day] = d.split('-').map(Number);
-        const dateObj = new Date(year, month - 1, day);
-        return `${dateObj.toLocaleDateString('en-US', {weekday:'short'})} ${dateObj.getDate()}`;
-    })]];
+            const head = [['Employee', ...weekDates.map(d => {
+                const [year, month, day] = d.split('-').map(Number);
+                const dateObj = new Date(year, month - 1, day);
+                return `${dateObj.toLocaleDateString('en-US', {weekday:'short'})} ${dateObj.getDate()}`;
+            })]];
 
-    const staffInWeek = staff.filter(emp => 
-        shifts.some(s => s.userId === emp.id && weekDates.includes(s.date))
-    );
-    
-    const displayStaff = staffInWeek.length > 0 ? staffInWeek : staff;
+            const staffInWeek = staff.filter(emp => 
+                shifts.some(s => s.userId === emp.id && weekDates.includes(s.date))
+            );
+            
+            const displayStaff = staffInWeek.length > 0 ? staffInWeek : staff;
 
-    const body = displayStaff.map(emp => {
-        const row = [emp.name];
-        weekDates.forEach(date => {
-            const dayShifts = shifts.filter(s => s.userId === emp.id && s.date === date);
-            if (dayShifts.length > 0) {
-                // Map through each shift, display times, calculate hours, and join them
-                const shiftStrings = dayShifts.map(s => {
-                    const [sH, sM] = s.startTime.split(':').map(Number);
-                    const [eH, eM] = s.endTime.split(':').map(Number);
-                    
-                    let startTotal = sH * 60 + sM;
-                    let endTotal = eH * 60 + eM;
-                    if (endTotal <= startTotal) endTotal += 1440; // Handles overnight shifts
-                    
-                    const durationHours = ((endTotal - startTotal) / 60).toFixed(1);
-                    return `${s.startTime} - ${s.endTime}\n(${durationHours} hrs)`;
+            const body = displayStaff.map(emp => {
+                const row = [emp.name];
+                weekDates.forEach(date => {
+                    const dayShifts = shifts.filter(s => s.userId === emp.id && s.date === date);
+                    if (dayShifts.length > 0) {
+                        const shiftStrings = dayShifts.map(s => {
+                            const [sH, sM] = s.startTime.split(':').map(Number);
+                            const [eH, eM] = s.endTime.split(':').map(Number);
+                            
+                            let startTotal = sH * 60 + sM;
+                            let endTotal = eH * 60 + eM;
+                            if (endTotal <= startTotal) endTotal += 1440; 
+                            
+                            const durationHours = ((endTotal - startTotal) / 60).toFixed(1);
+                            return `${s.startTime} - ${s.endTime}\n(${durationHours} hrs)`;
+                        });
+                        row.push(shiftStrings.join('\n\n'));
+                    } else {
+                        row.push('-');
+                    }
                 });
-                row.push(shiftStrings.join('\n\n'));
-            } else {
-                row.push('-');
-            }
-        });
-        return row;
-    });
+                return row;
+            });
 
-    doc.autoTable({
-        startY: 40,
-        head: head,
-        body: body,
-        headStyles: { fillColor: [15, 23, 42] },
-        styles: { fontSize: 9, cellPadding: 4, valign: 'middle', halign: 'center' },
-        columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } }, // Keep names left-aligned
-        alternateRowStyles: { fillColor: [248, 250, 252] }
-    });
+            doc.autoTable({
+                startY: 40,
+                head: head,
+                body: body,
+                headStyles: { fillColor: [15, 23, 42] },
+                styles: { fontSize: 9, cellPadding: 4, valign: 'middle', halign: 'center' },
+                columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } }, 
+                alternateRowStyles: { fillColor: [248, 250, 252] }
+            });
 
-    doc.save(`UP_Vision_Schedule_Week_Of_${weekDates[0]}.pdf`);
-};
+            doc.save(`UP_Vision_Schedule_Week_Of_${weekDates[0]}.pdf`);
+        };
 
           return (
             <div className="space-y-6">
@@ -501,7 +495,6 @@ const generatePayStubPDF = (employee, hours, overtimeHours, statHours, rate, ded
                    <span className="font-bold text-slate-900 px-4 min-w-[180px] text-center">Week of {weekDates[0]}</span>
                    <button onClick={()=>setBaseDate(new Date(baseDate.setDate(baseDate.getDate()+7)))} className="p-3 hover:bg-slate-50 rounded-xl transition-colors"><ChevronRight/></button>
                    
-                   {/* Export Schedule Button */}
                    <button onClick={handleExportSchedule} title="Export Schedule to PDF" className="ml-2 p-3 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-xl transition-colors">
                      <FileText className="w-5 h-5"/>
                    </button>
@@ -699,12 +692,15 @@ const generatePayStubPDF = (employee, hours, overtimeHours, statHours, rate, ded
                 .filter(p => p.userId === user.id && new Date(p.timestamp).getMonth() === now.getMonth())
                 .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
 
+            // Compute math metrics passing simple single block total safely to core engine
+            const deductions = calculateNet(totalEarnedCurrentMonth, 0, 0);
+
             return {
               ytd: calcRange(user.id, startYear, now).total,
               lastMonth: calcRange(user.id, startLastMonth, endLastMonth).total,
               lastWeek: calcRange(user.id, startLastWeek, endLastWeek).total,
               grossEarnedCurrent: totalEarnedCurrentMonth,
-              due: Math.max(0, calculateNet(earnedInfo.hours, user.hourlyRate || 16.55).net - totalPaidCurrentMonth),
+              due: Math.max(0, deductions.net - totalPaidCurrentMonth),
               dueHours: earnedInfo.hours
             };
           }, [user.id, punches, staff, payments]);
@@ -748,14 +744,17 @@ const generatePayStubPDF = (employee, hours, overtimeHours, statHours, rate, ded
 
               const reportData = staff.map(s => {
                   const rangeStats = calcRange(s.id, start, end);
-                 const deductions = calculateNet(rangeStats.hours, s.hourlyRate || 16.55);
+                  // Default historic bulk exports assume simple base aggregations
+                  const deductions = calculateNet(rangeStats.total, 0, 0);
                   const sPayments = payments.filter(p => p.userId === s.id && p.timestamp >= start.getTime() && p.timestamp <= end.getTime());
                   const totalActuallyPaid = sPayments.reduce((acc, curr) => acc + curr.amount, 0);
 
                   return {
                       'Employee Name': s.name,
                       'Hours Worked': rangeStats.hours.toFixed(2),
-                      'Gross Earnings': rangeStats.total.toFixed(2),
+                      'Gross Base Earnings': rangeStats.total.toFixed(2),
+                      'Vacation Pay (4%)': deductions.vacationPay.toFixed(2),
+                      'Total Taxable Gross': deductions.gross.toFixed(2),
                       'Federal Tax': deductions.fedTax.toFixed(2),
                       'Provincial Tax': deductions.provTax.toFixed(2),
                       'CPP': deductions.cpp.toFixed(2),
@@ -778,60 +777,17 @@ const generatePayStubPDF = (employee, hours, overtimeHours, statHours, rate, ded
               const selectedPeriod = periods.find(p => p.id === period);
               if (!selectedPeriod) return;
 
-              const {jsPDF} = window.jspdf; 
-              const doc = new jsPDF();
-              
               const start = new Date(selectedPeriod.year, selectedPeriod.month, selectedPeriod.startDay);
               const end = new Date(selectedPeriod.year, selectedPeriod.month, selectedPeriod.endDay, 23, 59, 59);
               
               const rangeData = calcRange(user.id, start, end);
-              const deductions = calculateNet(rangeData.hours, user.hourlyRate || 16.55);
-              const locName = locations.find(l => l.id === user.locationId)?.name || "Main Office";
-              
-              const lastPayment = payments
-                .filter(p => p.userId === user.id && p.timestamp >= start.getTime() && p.timestamp <= end.getTime())
-                .sort((a,b) => b.timestamp - a.timestamp)[0];
+              const rate = staff.find(s => s.id === user.id)?.hourlyRate || 16.55;
 
-              doc.setFontSize(22); doc.text("UP VISION", 105, 25, {align:'center'});
-              doc.setFontSize(14); doc.text("EARNING STATEMENT", 105, 33, {align:'center'});
-              doc.setFontSize(10);
-              doc.text(`Employee: ${user.name}`, 14, 45);
-              doc.text(`Location: ${locName}`, 14, 50);
-              doc.text(`Pay Period: ${selectedPeriod.label}`, 14, 55);
-              doc.text(`Total Hours: ${rangeData.hours.toFixed(2)} hrs`, 14, 60);
+              // Safe execution route passing 3 elements to global worker 
+              const deductions = calculateNet(rangeData.total, 0, 0);
               
-              if(lastPayment) {
-                  doc.text(`Payment Date: ${new Date(lastPayment.timestamp).toLocaleDateString()}`, 130, 45);
-                  doc.text(`Pay Method: ${lastPayment.method || 'N/A'}`, 130, 50);
-                  doc.text(`Amount Paid: $${parseFloat(lastPayment.amount).toFixed(2)}`, 130, 55);
-              }
-
-              const pdfBody = [
-                  ['Regular Pay', `$${deductions.regPay.toFixed(2)}`]
-              ];
-              if(deductions.otHours > 0) pdfBody.push(['Overtime Pay (1.5x)', `$${deductions.otPay.toFixed(2)}`]);
-              if(deductions.statHours > 0) pdfBody.push(['Stat Pay (1.5x)', `$${deductions.sPay.toFixed(2)}`]);
-              
-              pdfBody.push(
-                  ['Vacation Pay (4%)', `$${deductions.vacPay.toFixed(2)}`],
-                  ['Gross Earnings', `$${deductions.gross.toFixed(2)}`],
-                  ['Federal Income Tax', `-$${deductions.fedTax.toFixed(2)}`],
-                  ['Provincial Income Tax', `-$${deductions.provTax.toFixed(2)}`],
-                  ['CPP (Canada Pension Plan)', `-$${deductions.cpp.toFixed(2)}`],
-                  ['EI (Employment Insurance)', `-$${deductions.ei.toFixed(2)}`],
-                  ['TOTAL DEDUCTIONS', `-$${deductions.totalDeductions.toFixed(2)}`],
-                  ['TOTAL NET CALCULATED', `$${deductions.net.toFixed(2)}`]
-              );
-
-              doc.autoTable({ 
-                  startY: 70, 
-                  headStyles: {fillColor: [15, 23, 42]}, 
-                  head:[['Earning Description','Amount (CAD)']], 
-                  body: pdfBody,
-                  foot:[['Calculated Net Pay', `$${deductions.net.toFixed(2)}`]],
-                  footStyles: {fillColor: [37, 99, 235], textColor: [255, 255, 255]}
-              });
-              doc.save(`UP_Vision_PayStub_${user.name}_${selectedPeriod.id}.pdf`);
+              // Call global component download constructor explicitly passing distinct structures
+              generatePayStubPDF(user, rangeData.hours, 0, 0, rate, deductions, selectedPeriod.label, selectedPeriod.id);
           };
 
           return (
@@ -883,186 +839,180 @@ const generatePayStubPDF = (employee, hours, overtimeHours, statHours, rate, ded
           );
         };
 
-const PaymentsAdmin = ({ user, punches, staff, payments }) => {
-  // State for the Manual Pay Stub Generator
-  const [selectedStaffId, setSelectedStaffId] = useState('');
-  const [manualHours, setManualHours] = useState('');
-  const [manualOvertimeHours, setManualOvertimeHours] = useState('');
-  const [manualStatHours, setManualStatHours] = useState(''); 
-  const [payPeriodStart, setPayPeriodStart] = useState('');
-  const [payPeriodEnd, setPayPeriodEnd] = useState('');
+        const PaymentsAdmin = ({ user, punches, staff, payments }) => {
+          // State for the Manual Pay Stub Generator
+          const [selectedStaffId, setSelectedStaffId] = useState('');
+          const [manualHours, setManualHours] = useState('');
+          const [manualOvertimeHours, setManualOvertimeHours] = useState('');
+          const [manualStatHours, setManualStatHours] = useState(''); 
+          const [payPeriodStart, setPayPeriodStart] = useState('');
+          const [payPeriodEnd, setPayPeriodEnd] = useState('');
 
-  // Helper local function to generate PDF Pay Stubs cleanly
-  const handleGenerateManualStub = () => {
-    if (!selectedStaffId || !payPeriodStart || !payPeriodEnd) {
-      alert("Please fill out all identity and date range fields to generate the pay stub.");
-      return;
-    }
+          const handleGenerateManualStub = () => {
+            if (!selectedStaffId || !payPeriodStart || !payPeriodEnd) {
+              alert("Please fill out all identity and date range fields to generate the pay stub.");
+              return;
+            }
 
-    const employee = staff.find(s => s.id === selectedStaffId);
-    if (!employee) return;
+            const employee = staff.find(s => s.id === selectedStaffId);
+            if (!employee) return;
 
-    // Sanitation checks mapping empty values safely to '0' to explicitly prevent $NaN display bugs
-    const hourlyRate = parseFloat(employee.hourlyRate) || 16.55; 
-    const regularHrs = parseFloat(manualHours) || 0;
-    const overtimeHrs = parseFloat(manualOvertimeHours) || 0;
-    const statHrs = parseFloat(manualStatHours) || 0;
+            const hourlyRate = parseFloat(employee.hourlyRate) || 16.55; 
+            const regularHrs = parseFloat(manualHours) || 0;
+            const overtimeHrs = parseFloat(manualOvertimeHours) || 0;
+            const statHrs = parseFloat(manualStatHours) || 0;
 
-    // Core Base Earnings Formulation 
-    const regularGross = hourlyRate * regularHrs;
-    const overtimeGross = (hourlyRate * 1.5) * overtimeHrs;
-    const statGross = hourlyRate * statHrs;
-    const totalBaseGross = regularGross + overtimeGross + statGross;
-    
-    // Call calculation engine (Calculates internal vacation elements too)
-    const deductions = calculateNet(totalBaseGross);
+            // Compute exact baseline blocks before shipping to the core math engine
+            const regularGross = hourlyRate * regularHrs;
+            const overtimeGross = (hourlyRate * 1.5) * overtimeHrs;
+            const statGross = hourlyRate * statHrs;
+            
+            // Execute order of operations engine
+            const deductions = calculateNet(regularGross, overtimeGross, statGross);
 
-    // Call PDF Constructor Engine with all variables accounted for
-    generatePayStubPDF(employee, regularHrs, overtimeHrs, statHrs, hourlyRate, deductions, payPeriodStart, payPeriodEnd);
-  };
+            // Pass execution array down to PDF printer component
+            generatePayStubPDF(employee, regularHrs, overtimeHrs, statHrs, hourlyRate, deductions, payPeriodStart, payPeriodEnd);
+          };
 
-  return (
-    <div className="space-y-10">
-      {/* 1. TOP HEADER SECTION */}
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight">Process Payments</h1>
-          <p className="text-sm font-bold text-slate-400 mt-1">Super-Admin Management Dashboard</p>
-        </div>
-      </header>
+          return (
+            <div className="space-y-10">
+              <header className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-4xl font-black text-slate-900 tracking-tight">Process Payments</h1>
+                  <p className="text-sm font-bold text-slate-400 mt-1">Super-Admin Management Dashboard</p>
+                </div>
+              </header>
 
-      {/* 2. MANUAL PAY STUB GENERATOR INTERFACE CARD */}
-      <div className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
-        <h2 className="text-xl font-black text-slate-900 mb-6 uppercase tracking-wider flex items-center gap-3">
-          <FileSpreadsheet className="text-blue-600 w-5 h-5"/> Manual Pay Stub Generator
-        </h2>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 items-end">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Employee</label>
-            <select 
-              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
-              value={selectedStaffId} 
-              onChange={e => setSelectedStaffId(e.target.value)}
-            >
-              <option value="">Select Employee...</option>
-              {staff.map(s => (
-                <option key={s.id} value={s.id}>{s.name} (${s.hourlyRate || '16.55'}/hr)</option>
-              ))}
-            </select>
-          </div>
+              <div className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-xl relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
+                <h2 className="text-xl font-black text-slate-900 mb-6 uppercase tracking-wider flex items-center gap-3">
+                  <FileSpreadsheet className="text-blue-600 w-5 h-5"/> Manual Pay Stub Generator
+                </h2>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 items-end">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Employee</label>
+                    <select 
+                      className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
+                      value={selectedStaffId} 
+                      onChange={e => setSelectedStaffId(e.target.value)}
+                    >
+                      <option value="">Select Employee...</option>
+                      {staff.map(s => (
+                        <option key={s.id} value={s.id}>{s.name} (${s.hourlyRate || '16.55'}/hr)</option>
+                      ))}
+                    </select>
+                  </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Reg Hours</label>
-            <input 
-              type="number" 
-              step="0.1"
-              placeholder="e.g. 70" 
-              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
-              value={manualHours}
-              onChange={e => setManualHours(e.target.value)}
-            />
-          </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Reg Hours</label>
+                    <input 
+                      type="number" 
+                      step="0.1"
+                      placeholder="e.g. 70" 
+                      className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
+                      value={manualHours}
+                      onChange={e => setManualHours(e.target.value)}
+                    />
+                  </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">OT Hours (1.5x)</label>
-            <input 
-              type="number" 
-              step="0.1"
-              placeholder="e.g. 5" 
-              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
-              value={manualOvertimeHours}
-              onChange={e => setManualOvertimeHours(e.target.value)}
-            />
-          </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">OT Hours (1.5x)</label>
+                    <input 
+                      type="number" 
+                      step="0.1"
+                      placeholder="e.g. 5" 
+                      className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
+                      value={manualOvertimeHours}
+                      onChange={e => setManualOvertimeHours(e.target.value)}
+                    />
+                  </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Stat Hours</label>
-            <input 
-              type="number" 
-              step="0.1"
-              placeholder="e.g. 8" 
-              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
-              value={manualStatHours}
-              onChange={e => setManualStatHours(e.target.value)}
-            />
-          </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Stat Hours</label>
+                    <input 
+                      type="number" 
+                      step="0.1"
+                      placeholder="e.g. 8" 
+                      className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
+                      value={manualStatHours}
+                      onChange={e => setManualStatHours(e.target.value)}
+                    />
+                  </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Period Start</label>
-            <input 
-              type="date" 
-              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
-              value={payPeriodStart}
-              onChange={e => setPayPeriodStart(e.target.value)}
-            />
-          </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Period Start</label>
+                    <input 
+                      type="date" 
+                      className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
+                      value={payPeriodStart}
+                      onChange={e => setPayPeriodStart(e.target.value)}
+                    />
+                  </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Period End</label>
-            <input 
-              type="date" 
-              className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
-              value={payPeriodEnd}
-              onChange={e => setPayPeriodEnd(e.target.value)}
-            />
-          </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-wider">Period End</label>
+                    <input 
+                      type="date" 
+                      className="w-full border-2 border-slate-100 p-4 rounded-xl font-bold bg-slate-50 text-xs focus:ring-2 ring-blue-500 outline-none"
+                      value={payPeriodEnd}
+                      onChange={e => setPayPeriodEnd(e.target.value)}
+                    />
+                  </div>
 
-          <button 
-            onClick={handleGenerateManualStub}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-lg shadow-blue-600/20 uppercase tracking-wider text-[10px] transition-all active:scale-[0.98] h-[52px]"
-          >
-            Download Pay Stub
-          </button>
-        </div>
-      </div>
+                  <button 
+                    onClick={handleGenerateManualStub}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-lg shadow-blue-600/20 uppercase tracking-wider text-[10px] transition-all active:scale-[0.98] h-[52px]"
+                  >
+                    Download Pay Stub
+                  </button>
+                </div>
+              </div>
 
-      {/* 3. LIVE STAFF TRACKING RUNNING OVERVIEW SUMMARY */}
-      <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden">
-        <div className="p-8 border-b border-slate-50 bg-slate-50/50">
-          <h2 className="text-lg font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
-            <Users className="text-slate-700 w-5 h-5" /> Team Earnings & Hourly Summaries
-          </h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left min-w-[800px]">
-            <thead>
-              <tr className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest">
-                <th className="p-5">Employee</th>
-                <th className="p-5">Assigned Wage Base</th>
-                <th className="p-5">Total Historic Punches</th>
-                <th className="p-5">Processed Payroll Records</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-sm font-bold text-slate-700">
-              {staff.map(member => {
-                const staffPunches = punches.filter(p => p.userId === member.id);
-                const staffPayments = payments.filter(p => p.userId === member.id);
-                return (
-                  <tr key={member.id} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="p-5 font-black text-slate-900">{member.name}</td>
-                    <td className="p-5">${parseFloat(member.hourlyRate || 16.55).toFixed(2)} / hr</td>
-                    <td className="p-5">
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-black bg-slate-100 text-slate-600">
-                        {staffPunches.length} records
-                      </span>
-                    </td>
-                    <td className="p-5">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-black ${staffPayments.length > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                        {staffPayments.length} Stub(s) Issued
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-};
+              <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden">
+                <div className="p-8 border-b border-slate-50 bg-slate-50/50">
+                  <h2 className="text-lg font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <Users className="text-slate-700 w-5 h-5" /> Team Earnings & Hourly Summaries
+                  </h2>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-left min-w-[800px]">
+                    <thead>
+                      <tr className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest">
+                        <th className="p-5">Employee</th>
+                        <th className="p-5">Assigned Wage Base</th>
+                        <th className="p-5">Total Historic Punches</th>
+                        <th className="p-5">Processed Payroll Records</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-sm font-bold text-slate-700">
+                      {staff.map(member => {
+                        const staffPunches = punches.filter(p => p.userId === member.id);
+                        const staffPayments = payments.filter(p => p.userId === member.id);
+                        return (
+                          <tr key={member.id} className="hover:bg-slate-50/60 transition-colors">
+                            <td className="p-5 font-black text-slate-900">{member.name}</td>
+                            <td className="p-5">${parseFloat(member.hourlyRate || 16.55).toFixed(2)} / hr</td>
+                            <td className="p-5">
+                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-black bg-slate-100 text-slate-600">
+                                {staffPunches.length} records
+                              </span>
+                            </td>
+                            <td className="p-5">
+                              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-black ${staffPayments.length > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                                {staffPayments.length} Stub(s) Issued
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        };
 
         const StaffManager = ({ user, staff, locations }) => {
           const [showAdd, setShowAdd] = useState(false);
