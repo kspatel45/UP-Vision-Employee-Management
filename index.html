@@ -158,14 +158,14 @@
           const earningsBody = [
             ['Regular Hourly Base Pay', rHours.toFixed(2), `$${rRate.toFixed(2)}`, `$${regularPayTotal.toFixed(2)}`],
             ['Overtime Premium Pay (1.5x)', oHours.toFixed(2), `$${overtimeRate.toFixed(2)}`, `$${overtimePayTotal.toFixed(2)}`],
-            ['Statutory Holiday Pay (1.5x)', sHours.toFixed(2), `$${rRate.toFixed(2)}`, `$${statPayTotal.toFixed(2)}`],
+            ['Statutory Holiday Pay (1.5x)', sHours.toFixed(2), `$${overtimeRate.toFixed(2)}`, `$${statPayTotal.toFixed(2)}`],
             ['Vacation Pay Accrual', '4.00% of Base Total', '', `$${deductions.vacationPay.toFixed(2)}`],
             ['Gross Earnings Total', '', '', `$${deductions.gross.toFixed(2)}`]
           ];
 
           const deductionsHead = [['Statutory Deduction Details', 'Percentage / Rate', 'Amount Withheld']];
           const deductionsBody = [
-            ['Federal Income Tax', '15.0%', `$${deductions.fedTax.toFixed(2)}`],
+            ['Federal Income Tax', '14.0%', `$${deductions.fedTax.toFixed(2)}`],
             ['Provincial Income Tax', '5.0%', `$${deductions.provTax.toFixed(2)}`],
             ['CPP (Canada Pension Plan)', '5.95%', `$${deductions.cpp.toFixed(2)}`],
             ['EI (Employment Insurance)', '1.63%', `$${deductions.ei.toFixed(2)}`],
