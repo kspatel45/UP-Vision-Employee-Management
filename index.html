@@ -82,20 +82,22 @@
             
             // 2026 Canadian Basic Personal Amount (BPA)
             const bpa = 16452; 
+            const bpap = 12747; 
             
             // Calculate taxable annual income (Income minus tax-free baseline)
             const annualizedTaxable = Math.max(0, annualizedGross - bpa);
+            const annualizedTaxablep = Math.max(0, annualizedGross - bpap);
             
             // Annual Tax Calculations (15% Fed, 5% Prov on taxable portion)
             const annualFedTax = annualizedTaxable * 0.15;
-            const annualProvTax = annualizedTaxable * 0.05;
+            const annualProvTax = annualizedTaxablep * 0.05;
             
             // De-annualize taxes back down to this specific semi-monthly pay stub
             const fedTax = annualFedTax / periods;
             const provTax = annualProvTax / periods;
             
             // Statutory Deductions
-            const cpp = gross * 0.0595; // CPP at 5.95%
+            const cpp = (gross-145.83) * 0.0595; // CPP at 5.95%, $145.83 is CPP exemption.
             const ei = gross * 0.0163;  // EI at 1.63%
             
             const totalDeductions = fedTax + provTax + cpp + ei;
@@ -165,8 +167,8 @@
 
           const deductionsHead = [['Statutory Deduction Details', 'Percentage / Rate', 'Amount Withheld']];
           const deductionsBody = [
-            ['Federal Income Tax', '14.0%', `$${deductions.fedTax.toFixed(2)}`],
-            ['Provincial Income Tax', '5.0%', `$${deductions.provTax.toFixed(2)}`],
+            ['Federal Income Tax','', `$${deductions.fedTax.toFixed(2)}`],
+            ['Provincial Income Tax','',  `$${deductions.provTax.toFixed(2)}`],
             ['CPP (Canada Pension Plan)', '5.95%', `$${deductions.cpp.toFixed(2)}`],
             ['EI (Employment Insurance)', '1.63%', `$${deductions.ei.toFixed(2)}`],
             ['Total Statutory Deductions', '', `$${deductions.totalDeductions.toFixed(2)}`]
@@ -205,7 +207,7 @@
           // Footer note
           doc.setFontSize(8);
           doc.setFont("helvetica", "italic");
-          doc.text("This is an official administrative payroll copy prepared through the UP Vision Staff Portal.", 14, finalY + 30);
+          doc.text("This is an official administrative payroll copy prepared through the UP Vision Staff Portal, Tax deductions calculated based on Claim Code 1.", 14, finalY + 30);
 
           // Trigger browser download action
           doc.save(`PayStub_${employee.name.replace(/\s+/g, '_')}_${start}.pdf`);
