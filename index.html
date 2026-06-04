@@ -151,14 +151,14 @@
           const regularPayTotal = rHours * rRate;
           const overtimeRate = rRate * 1.5;
           const overtimePayTotal = oHours * overtimeRate;
-          const statPayTotal = sHours * rRate; 
+          const statPayTotal = sHours * rRate * 1.5; 
 
           // Table Data Structures
           const earningsHead = [['Earnings Breakdown', 'Hours / Basis', 'Rate', 'Total Amount']];
           const earningsBody = [
             ['Regular Hourly Base Pay', rHours.toFixed(2), `$${rRate.toFixed(2)}`, `$${regularPayTotal.toFixed(2)}`],
             ['Overtime Premium Pay (1.5x)', oHours.toFixed(2), `$${overtimeRate.toFixed(2)}`, `$${overtimePayTotal.toFixed(2)}`],
-            ['Statutory Holiday Pay', sHours.toFixed(2), `$${rRate.toFixed(2)}`, `$${statPayTotal.toFixed(2)}`],
+            ['Statutory Holiday Pay (1.5x)', sHours.toFixed(2), `$${rRate.toFixed(2)}`, `$${statPayTotal.toFixed(2)}`],
             ['Vacation Pay Accrual', '4.00% of Base Total', '', `$${deductions.vacationPay.toFixed(2)}`],
             ['Gross Earnings Total', '', '', `$${deductions.gross.toFixed(2)}`]
           ];
