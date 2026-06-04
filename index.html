@@ -69,51 +69,94 @@
         };
 
         // Global calculation module with correct mathematical boundaries
-        const calculateNet = (regularGross, overtimeGross, statGross) => {
-            const periods = 24; // Semi-monthly pay periods
-            
-            // Calculate vacation pay precisely on the aggregated gross baseline sum
-            const basePaySum = regularGross + overtimeGross + statGross;
-            const vacationPay = basePaySum * 0.04;
-            
-            // Total Taxable Gross Pay includes all earnings combined + vacation pay
-            const gross = basePaySum + vacationPay;
-            const annualizedGross = gross * periods;
-            
-            // 2026 Canadian Basic Personal Amount (BPA)
-            const bpa = 16452; 
-            const bpap = 12747; 
-            
-            // Calculate taxable annual income (Income minus tax-free baseline)
-            const annualizedTaxable = Math.max(0, annualizedGross - bpa);
-            const annualizedTaxablep = Math.max(0, annualizedGross - bpap);
-            
-            // Annual Tax Calculations (15% Fed, 5% Prov on taxable portion)
-            const annualFedTax = annualizedTaxable * 0.15;
-            const annualProvTax = annualizedTaxablep * 0.05;
-            
-            // De-annualize taxes back down to this specific semi-monthly pay stub
-            const fedTax = annualFedTax / periods;
-            const provTax = annualProvTax / periods;
-            
-            // Statutory Deductions
-            const cpp = (gross-145.83) * 0.0595; // CPP at 5.95%, $145.83 is CPP exemption.
-            const ei = gross * 0.0163;  // EI at 1.63%
-            
-            const totalDeductions = fedTax + provTax + cpp + ei;
-            
-            return {
-                baseGrossPay: basePaySum,
-                vacationPay,
-                gross,
-                fedTax,
-                provTax,
-                cpp,
-                ei,
-                totalDeductions,
-                net: Math.max(0, gross - totalDeductions)
-            };
-        };
+       // Global calculation module with 2026 progressive tax brackets
+const calculateNet = (regularGross, overtimeGross, statGross) => {
+    const periods = 24; // Semi-monthly pay periods
+    
+    // Calculate vacation pay precisely on the aggregated gross baseline sum
+    const basePaySum = regularGross + overtimeGross + statGross;
+    const vacationPay = basePaySum * 0.04;
+    
+    // Total Taxable Gross Pay includes all earnings combined + vacation pay
+    const gross = basePaySum + vacationPay;
+    const annualizedGross = gross * periods;
+    
+    // 2026 Canadian Basic Personal Amounts (BPA)
+    const bpa = 16452; 
+    const bpap = 12747; 
+    
+    // Calculate taxable annual income (Income minus tax-free baseline)
+    const annualizedTaxable = Math.max(0, annualizedGross - bpa);
+    const annualizedTaxablep = Math.max(0, annualizedGross - bpap);
+    
+    // Progressive Federal Tax Calculation (2026 Brackets)
+    let annualFedTax = 0;
+    let fedTaxable = annualizedTaxable;
+    
+    const fedBrackets = [
+        { limit: 57937, rate: 0.15 },
+        { limit: 115874, rate: 0.205 },
+        { limit: 179644, rate: 0.26 },
+        { limit: 246752, rate: 0.29 },
+        { limit: Infinity, rate: 0.33 }
+    ];
+
+    let lastFedLimit = 0;
+    for (const bracket of fedBrackets) {
+        if (fedTaxable > lastFedLimit) {
+            const taxableInThisBracket = Math.min(fedTaxable, bracket.limit) - lastFedLimit;
+            annualFedTax += taxableInThisBracket * bracket.rate;
+            lastFedLimit = bracket.limit;
+        } else {
+            break;
+        }
+    }
+
+    // Progressive Ontario Provincial Tax Calculation (2026 Brackets)
+    let annualProvTax = 0;
+    let provTaxable = annualizedTaxablep;
+
+    const provBrackets = [
+        { limit: 52244, rate: 0.0505 },
+        { limit: 104491, rate: 0.0915 },
+        { limit: 150000, rate: 0.1116 },
+        { limit: 220000, rate: 0.1216 },
+        { limit: Infinity, rate: 0.1316 }
+    ];
+
+    let lastProvLimit = 0;
+    for (const bracket of provBrackets) {
+        if (provTaxable > lastProvLimit) {
+            const taxableInThisBracket = Math.min(provTaxable, bracket.limit) - lastProvLimit;
+            annualProvTax += taxableInThisBracket * bracket.rate;
+            lastProvLimit = bracket.limit;
+        } else {
+            break;
+        }
+    }
+    
+    // De-annualize taxes back down to this specific semi-monthly pay stub
+    const fedTax = annualFedTax / periods;
+    const provTax = annualProvTax / periods;
+    
+    // Statutory Deductions
+    const cpp = Math.max(0, (gross - 145.83) * 0.0595); // CPP at 5.95%, $145.83 is semi-monthly exemption baseline.
+    const ei = gross * 0.0163;  // EI at 1.63%
+    
+    const totalDeductions = fedTax + provTax + cpp + ei;
+    
+    return {
+        baseGrossPay: basePaySum,
+        vacationPay,
+        gross,
+        fedTax,
+        provTax,
+        cpp,
+        ei,
+        totalDeductions,
+        net: Math.max(0, gross - totalDeductions)
+    };
+};
 
         // Unified layout constructor processing explicit hourly structures
         const generatePayStubPDF = (employee, hours, overtimeHours, statHours, rate, deductions, start, end) => {
