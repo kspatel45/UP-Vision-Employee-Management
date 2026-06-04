@@ -865,7 +865,7 @@
             // Compute exact baseline blocks before shipping to the core math engine
             const regularGross = hourlyRate * regularHrs;
             const overtimeGross = (hourlyRate * 1.5) * overtimeHrs;
-            const statGross = hourlyRate * statHrs;
+            const statGross = (hourlyRate * 1.5) * statHrs;
             
             // Execute order of operations engine
             const deductions = calculateNet(regularGross, overtimeGross, statGross);
