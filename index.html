@@ -382,7 +382,8 @@ const calculateNet = (regularGross, overtimeGross, statGross) => {
         };
 
         const Dashboard = ({ user, punches }) => {
-          const todayStr = new Date().toISOString().split('T')[0];
+          const now = new Date();
+          const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
           const myPunches = punches.filter(p => p.userId === user.id && p.date === todayStr).sort((a,b) => b.timestamp - a.timestamp);
           const isPunchedIn = myPunches.length > 0 && myPunches[0].type === 'in';
           return (
@@ -420,18 +421,26 @@ const calculateNet = (regularGross, overtimeGross, statGross) => {
             return slots;
           }, []);
 
-          const weekDates = useMemo(() => {
-            const current = new Date(baseDate);
-            const dayOfWeek = current.getDay(); 
-            const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-            const monday = new Date(current);
-            monday.setDate(current.getDate() + distanceToMonday);
-            return Array.from({ length: 7 }, (_, i) => {
-              const nextDay = new Date(monday);
-              nextDay.setDate(monday.getDate() + i);
-              return nextDay.toISOString().split('T')[0]; 
-            });
-          }, [baseDate]);
+         const weekDates = useMemo(() => {
+  const current = new Date(baseDate);
+  const dayOfWeek = current.getDay(); 
+  const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(current);
+  monday.setDate(current.getDate() + distanceToMonday);
+  return Array.from({ length: 7 }, (_, i) => {
+    const nextDay = new Date(monday);
+    nextDay.setDate(monday.getDate() + i);
+    
+    // REMOVE this line:
+    // return nextDay.toISOString().split('T')[0]; 
+    
+    // ADD these local timezone-safe lines:
+    const y = nextDay.getFullYear();
+    const m = String(nextDay.getMonth() + 1).padStart(2, '0');
+    const d = String(nextDay.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  });
+}, [baseDate]);
 
           const getEmployeeForSlot = (date, slotMinutes) => {
             return shifts.filter(s => {
